@@ -1,0 +1,6 @@
+[package]
+name = "de-qr"
+version = "0.1.0"
+authors = ["WanzenBug <moritz9422@gmail.com>"]
+
+[dependencies]
