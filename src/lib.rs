@@ -1,99 +1,189 @@
-#![allow(
-dead_code, mutable_transmutes, non_camel_case_types, non_snake_case, non_upper_case_globals,
-unused_mut
-)]
+//! Find and read QR-Codes
+//!
+//! This crates exports functions and types that can be used to search for QR-Codes in images and
+//! decode them.
+//!
+//!
+//! # Usage
+//! The most basic usage is shown below:
+//!
+//! ```
+//! use image;
+//! use rqrr;
+//!
+//! let img = image::open("QR-Code.jpg").unwrap();
+//! let codes = rqrr::find_and_decode_from_image(&img);
+//! assert_eq!(codes.len(), 1);
+//! assert_eq!(codes[0].val, "http://qr2.it/Go/24356");
+//! ```
+//!
+//! If you have some other form of picture storage, you can use [`find_and_decode_from_func`]().
+//! This allows you define your own source for images.
+//! ```
+//! use image;
+//! use rqrr;
+//!
+//! let img = image::open("QR-Code.jpg").unwrap().to_luma();
+//! let w = img.width() as usize;
+//! let h = img.height() as usize;
+//! let codes = rqrr::find_and_decode(w, h, |x, y|  img.get_pixel(x as u32, y as u32).data[0]);
+//! assert_eq!(codes.len(), 1);
+//! assert_eq!(codes[0].val, "http://qr2.it/Go/24356");
+//! ```
+#[cfg(feature = "debug-plot")]
+use gnuplot;
+#[cfg(feature = "img")]
+use image;
 
-mod decode;
-mod galois;
-// mod identify;
-mod version_db;
+pub use self::decode::{MetaData, Version};
+use self::identify::{CapStone, capstones_from_image, find_groupings, Grid, Image, Point};
 
-pub use decode::{Code, Data};
-/* quirc -- QR-code recognition library
- * Copyright (C) 2010-2012 Daniel Beer <dlbeer@gmail.com>
- *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-#[derive(Clone)]
-pub struct Decoder {
-    pub image: *mut u8,
-    pub pixels: *mut u8,
-    pub row_average: *mut i32,
-    pub w: i32,
-    pub h: i32,
-    pub num_regions: i32,
-    pub regions: [Region; 254],
-    pub num_capstones: i32,
-    pub capstones: [CapStone; 32],
-    pub num_grids: i32,
-    pub grids: [Grid; 8],
+pub mod decode;
+pub mod galois;
+pub mod identify;
+pub mod version_db;
+
+
+#[derive(Debug)]
+pub struct Poly([Point; 4]);
+
+pub trait GridImage {
+    fn size(&self) -> usize;
+    fn bit(&self, x: usize, y: usize) -> bool;
 }
+
 #[derive(Debug, Clone)]
-pub struct Grid {
-    pub caps: [i32; 3],
-    pub align_region: i32,
-    pub align: Point,
-    pub tpep: [Point; 3],
-    pub hscan: i32,
-    pub vscan: i32,
-    pub grid_size: i32,
-    pub c: [f64; 8],
+pub struct SimpleGridImage {
+    cell_bitmap: Vec<u8>,
+    size: usize,
 }
-/* This structure describes a location in the input image buffer. */
-#[derive(Debug, Clone, Default)]
-pub struct Point {
-    pub x: i32,
-    pub y: i32,
+
+impl SimpleGridImage {
+    pub fn from_func<F>(size: usize, fill_func: F) -> Self where F: Fn(usize, usize) -> bool {
+        let mut cell_bitmap = vec![0; (size * size + 7) / 8];
+        let mut c = 0;
+        for y in 0..size {
+            for x in 0..size {
+                if fill_func(x, y) {
+                    cell_bitmap[c >> 3] |= 1 << (c & 7) as u8;
+                }
+                c += 1;
+            }
+        }
+
+        SimpleGridImage {
+            cell_bitmap,
+            size,
+        }
+    }
 }
-#[derive(Debug, Clone)]
-pub struct CapStone {
-    pub ring: i32,
-    pub stone: i32,
-    pub corners: [Point; 4],
-    pub center: Point,
-    pub c: [f64; 8],
-    pub qr_grid: i32,
+
+
+#[derive(Debug)]
+pub struct Code {
+    pub meta: MetaData,
+    pub val: String,
+    pub position: Poly,
 }
-#[derive(Debug, Clone)]
-pub struct Region {
-    pub seed: Point,
-    pub count: i32,
-    pub capstone: i32,
+
+pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
+    let img = img.to_luma();
+    let w = img.width() as usize;
+    let h = img.height() as usize;
+
+    find_and_decode_from_func(w, h, |x, y| {
+        img.get_pixel(x as u32, y as u32).data[0]
+    })
 }
-/* quirc -- QR-code recognition library
- * Copyright (C) 2010-2012 Daniel Beer <dlbeer@gmail.com>
- *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
+
+
+/// Find QR-Codes and decode them
+///
+/// This method expects to be given an image of dimension `width` * `height`. The data is supplied
+/// via the `fill` function. The fill function will be called width coordinates `x, y`, where `x`
+/// ranges from 0 to `width` and `y` from 0 to `height`. The return value is expected to correspond
+/// with the greyscale value of the image to decode, 0 being black, 255 being white.
+///
+/// # Returns
+///
+/// Returns a collection of all QR-Codes that have been found. They are already decoded and contain
+/// some extra metadata like position in the image as well as information about the used QR code
+/// itself
+///
+/// # Panics
+///
+/// Panics if `width * height` would overflow.
+///
+/// # Examples
+///
+/// ```
+/// use image;
+/// use rqrr;
+///
+/// let img = image::open("QR-Code.jpg").unwrap().to_luma();
+/// let w = img.width() as usize;
+/// let h = img.height() as usize;
+/// let codes = rqrr::find_and_decode(w, h, |x, y|  img.get_pixel(x as u32, y as u32).data[0]);
+/// assert_eq!(codes.len(), 1);
+/// assert_eq!(codes[0].val, "http://qr2.it/Go/24356");
+/// ```
+pub fn find_and_decode_from_func<F>(width: usize, height: usize, fill: F) -> Vec<Code> where F: FnMut(usize, usize) -> u8 {
+    let mut img = Image::from_greyscale(width, height, fill);
+    let mut ret = Vec::new();
+    let caps = capstones_from_image(&mut img);
+    let groups = find_groupings(caps);
+    let grids: Vec<_> = groups.into_iter()
+        .filter_map(|group| Grid::from_group(&mut img, group))
+        .collect();
+
+    for grid in grids {
+        let mut decode_val = Vec::new();
+
+        let grid_img = grid.into_grid_image(&img);
+
+        let meta = match decode::decode(&grid_img, &mut decode_val) {
+            Ok(x) => x,
+            Err(_) => continue,
+        };
+
+        let position = Poly([Default::default(); 4]);
+        let val = match String::from_utf8(decode_val) {
+            Ok(x) => x,
+            Err(_) => continue,
+        };
+
+        ret.push(Code {
+            meta,
+            val,
+            position,
+        })
+    }
+
+    ret
+}
+
+impl GridImage for SimpleGridImage {
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn bit(&self, x: usize, y: usize) -> bool {
+        let c = y * self.size + x;
+        self.cell_bitmap[c >> 3] & (1 << (c & 7) as u8) != 0
+    }
+}
+
+
 #[derive(Debug)]
 pub enum DeQRError {
-    DATA_UNDERFLOW,
-    DATA_OVERFLOW,
-    UNKNOWN_DATA_TYPE,
-    DATA_ECC,
-    FORMAT_ECC,
-    INVALID_VERSION,
-    INVALID_GRID_SIZE,
+    IoError,
+    DataUnderflow,
+    DataOverflow,
+    UnknownDataType,
+    DataEcc,
+    FormatEcc,
+    InvalidVersion,
+    InvalidGridSize,
 }
 
 pub type DeQRResult<T> = Result<T, DeQRError>;

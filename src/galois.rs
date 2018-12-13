@@ -17,8 +17,8 @@ pub trait GaloisField: Add<Output=Self>
 + Eq
 + PartialEq {
     fn pow(x: usize) -> Self;
-    const Zero: Self;
-    const One: Self;
+    const ZERO: Self;
+    const ONE: Self;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -29,20 +29,20 @@ pub struct GF256(pub u8);
 
 impl GaloisField for GF16 {
     fn pow(x: usize) -> Self {
-        GF16(gf16_exp[x % gf16_mul_order])
+        GF16(GF16_EXP[x % GF16_MUL_ORDER])
     }
 
-    const Zero: Self = GF16(0);
-    const One: Self = GF16(1);
+    const ZERO: Self = GF16(0);
+    const ONE: Self = GF16(1);
 }
 
 impl GaloisField for GF256 {
     fn pow(x: usize) -> Self {
-        GF256(gf256_exp[x % gf256_mul_order])
+        GF256(GF256_EXP[x % GF256_MUL_ORDER])
     }
 
-    const Zero: Self = GF256(0);
-    const One: Self = GF256(1);
+    const ZERO: Self = GF256(0);
+    const ONE: Self = GF256(1);
 }
 
 impl Add for GF16 {
@@ -105,14 +105,14 @@ impl Mul for GF16 {
     type Output = GF16;
 
     fn mul(self, rhs: GF16) -> <Self as Mul<GF16>>::Output {
-        if self == GF16::Zero || rhs == GF16::Zero {
+        if self == GF16::ZERO || rhs == GF16::ZERO {
             return GF16(0);
         }
 
-        let self_log = gf16_log[self.0 as usize] as u16;
-        let rhs_log = gf16_log[rhs.0 as usize] as u16;
-        let x = ((self_log + rhs_log) % gf16_mul_order as u16) as usize;
-        GF16(gf16_exp[x])
+        let self_log = GF16_LOG[self.0 as usize] as u16;
+        let rhs_log = GF16_LOG[rhs.0 as usize] as u16;
+        let x = ((self_log + rhs_log) % GF16_MUL_ORDER as u16) as usize;
+        GF16(GF16_EXP[x])
     }
 }
 
@@ -120,14 +120,14 @@ impl Mul for GF256 {
     type Output = GF256;
 
     fn mul(self, rhs: GF256) -> <Self as Mul<GF256>>::Output {
-        if self == GF256::Zero || rhs == GF256::Zero {
+        if self == GF256::ZERO || rhs == GF256::ZERO {
             return GF256(0);
         }
 
-        let self_log = gf256_log[self.0 as usize] as u16;
-        let rhs_log = gf256_log[rhs.0 as usize] as u16;
-        let x = ((self_log + rhs_log) % gf256_mul_order as u16) as usize;
-        GF256(gf256_exp[x])
+        let self_log = GF256_LOG[self.0 as usize] as u16;
+        let rhs_log = GF256_LOG[rhs.0 as usize] as u16;
+        let x = ((self_log + rhs_log) % GF256_MUL_ORDER as u16) as usize;
+        GF256(GF256_EXP[x])
     }
 }
 
@@ -147,14 +147,14 @@ impl Div for GF16 {
     type Output = GF16;
 
     fn div(self, rhs: GF16) -> <Self as Div<GF16>>::Output {
-        if rhs == GF16::Zero {
+        if rhs == GF16::ZERO {
             panic!("Divide by 0 in GF16");
         }
 
-        let self_log = gf16_log[self.0 as usize] as u16;
-        let rhs_log = gf16_log[rhs.0 as usize] as u16;
-        let x = ((self_log + gf16_mul_order as u16 - rhs_log) % gf16_mul_order as u16) as usize;
-        GF16(gf16_exp[x])
+        let self_log = GF16_LOG[self.0 as usize] as u16;
+        let rhs_log = GF16_LOG[rhs.0 as usize] as u16;
+        let x = ((self_log + GF16_MUL_ORDER as u16 - rhs_log) % GF16_MUL_ORDER as u16) as usize;
+        GF16(GF16_EXP[x])
     }
 }
 
@@ -162,14 +162,14 @@ impl Div for GF256 {
     type Output = GF256;
 
     fn div(self, rhs: GF256) -> <Self as Div<GF256>>::Output {
-        if rhs == GF256::Zero {
+        if rhs == GF256::ZERO {
             panic!("Divide by 0 in GF256");
         }
 
-        let self_log = gf256_log[self.0 as usize] as u16;
-        let rhs_log = gf256_log[rhs.0 as usize] as u16;
-        let x = ((self_log + gf256_mul_order as u16 - rhs_log) % gf256_mul_order as u16) as usize;
-        GF256(gf256_exp[x])
+        let self_log = GF256_LOG[self.0 as usize] as u16;
+        let rhs_log = GF256_LOG[rhs.0 as usize] as u16;
+        let x = ((self_log + GF256_MUL_ORDER as u16 - rhs_log) % GF256_MUL_ORDER as u16) as usize;
+        GF256(GF256_EXP[x])
     }
 }
 
@@ -186,8 +186,8 @@ impl DivAssign for GF256 {
 }
 
 
-const gf16_mul_order: usize = 15;
-const gf16_exp: [u8; 16] =
+const GF16_MUL_ORDER: usize = 15;
+const GF16_EXP: [u8; 16] =
     [
         0x1_u8,
         0x2_u8,
@@ -206,7 +206,7 @@ const gf16_exp: [u8; 16] =
         0x9_u8,
         0x1_u8,
     ];
-const gf16_log: [u8; 16] =
+const GF16_LOG: [u8; 16] =
     [
         0_u8,
         0xf_u8,
@@ -226,8 +226,8 @@ const gf16_log: [u8; 16] =
         0xc_u8,
     ];
 
-const gf256_mul_order: usize = 255;
-const gf256_log: [u8; 256] = {
+const GF256_MUL_ORDER: usize = 255;
+const GF256_LOG: [u8; 256] = {
     [
         0_u8,
         0xff_u8,
@@ -487,7 +487,7 @@ const gf256_log: [u8; 256] = {
         0xaf_u8,
     ]
 };
-const gf256_exp: [u8; 256] = {
+const GF256_EXP: [u8; 256] = {
     [
         0x1_u8,
         0x2_u8,

@@ -19,7 +19,7 @@ pub struct VersionInfo {
     pub ecc: [RSParameters; 4],
 }
 
-pub const VersionDataBase: [VersionInfo; 41] = [
+pub const VERSION_DATA_BASE: [VersionInfo; 41] = [
     VersionInfo {
         data_bytes: 0,
         apat: [0; 7],
