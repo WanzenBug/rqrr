@@ -26,11 +26,7 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn from_group(img: &mut Image, group: CapStoneGroup) -> Option<Self> {
-        Self::from_group_debug(img, group, |_, _| ())
-    }
-
-    pub fn from_group_debug<F>(img: &mut Image, mut group: CapStoneGroup, mut debug: F) -> Option<Self> where F: FnMut(&Image, Option<(usize, &helper::Perspective)>) {
+    pub fn from_group(img: &mut Image, mut group: CapStoneGroup) -> Option<Self> {
         /* Construct the hypotenuse line from A to C. B should be to
          * the left of this line.
          */
@@ -58,7 +54,6 @@ impl Grid {
          * transform.
          */
         let grid_size = measure_timing_pattern(img, &group);
-        debug(img, None);
 
         /* Make an estimate based for the alignment pattern based on extending
          * lines from capstones A and C.
@@ -75,7 +70,6 @@ impl Grid {
         if grid_size > 21 {
             /* Try to find the actual location of the alignment pattern. */
             align = find_alignment_pattern(img, align, &group.0, &group.2)?;
-            debug(img, None);
             let mut best_fit = align.clone();
             let mut score = -hd.y * best_fit.x + hd.x * best_fit.y;
             img.flood_fill(
@@ -86,11 +80,10 @@ impl Grid {
                 &mut |_, row| {
                     find_leftmost_to_line(&hd, &mut best_fit, &mut score, row.y, row.left, row.right);
                 });
-            debug(img, None);
             align = best_fit;
         }
 
-        let c = setup_perspective_debug(img, &group, align.clone(), grid_size, debug);
+        let c = setup_perspective(img, &group, align.clone(), grid_size);
         let caps = [group.0, group.1, group.2];
 
         Some(Grid {
@@ -146,10 +139,6 @@ impl<'a> RefGridImage<'a> {
 
 
 fn setup_perspective(img: &Image, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective {
-    setup_perspective_debug(img, caps, align, grid_size, |_, _| ())
-}
-
-fn setup_perspective_debug<F>(img: &Image, caps: &CapStoneGroup, align: Point, grid_size: usize, mut debug: F) -> helper::Perspective where F: FnMut(&Image, Option<(usize, &helper::Perspective)>) {
     let inital = helper::Perspective::create(&[
         caps.1.corners[0],
         caps.2.corners[0],
@@ -157,8 +146,7 @@ fn setup_perspective_debug<F>(img: &Image, caps: &CapStoneGroup, align: Point, g
         caps.0.corners[0],
     ], (grid_size - 7) as f64, (grid_size - 7) as f64);
 
-    debug(img, Some((grid_size, &inital)));
-    jiggle_perspective(img, inital, grid_size, debug)
+    jiggle_perspective(img, inital, grid_size)
 }
 
 fn rotate_capstone(
@@ -263,10 +251,10 @@ fn find_alignment_pattern(img: &mut Image, mut align_seed: Point, c0: &CapStone,
 
             let cur_px = img[(x, y)];
             if cur_px != PixelColor::White && cur_px != PixelColor::FindAlignment {
-                let (old, count) = img.repaint_and_count((x, y), PixelColor::FindAlignment, |_, _, _, _| ());
+                let (old, count) = img.repaint_and_count((x, y), PixelColor::FindAlignment);
                 if count >= size_estimate / 2 && count <= size_estimate * 2 {
                     for (x, y, color) in unsuccessful_searches.into_iter() {
-                        img.repaint_and_count((x, y), color, |_, _, _, _| ());
+                        img.repaint_and_count((x, y), color);
                     }
 
                     return Some(align_seed);
@@ -287,7 +275,7 @@ fn find_alignment_pattern(img: &mut Image, mut align_seed: Point, c0: &CapStone,
     }
 
     for (x, y, color) in unsuccessful_searches.into_iter() {
-        img.repaint_and_count((x, y), color, |_, _, _, _| ());
+        img.repaint_and_count((x, y), color);
     }
 
     None
@@ -312,7 +300,7 @@ fn find_leftmost_to_line(
 }
 
 
-fn jiggle_perspective<F>(img: &Image, mut perspective: helper::Perspective, grid_size: usize, mut debug: F) -> helper::Perspective where F: FnMut(&Image, Option<(usize, &helper::Perspective)>) {
+fn jiggle_perspective(img: &Image, mut perspective: helper::Perspective, grid_size: usize) -> helper::Perspective {
     let mut best = fitness_all(img, &perspective, grid_size);
     let mut adjustments: [f64; 8] = [
         perspective.0[0] * 0.02f64,
@@ -344,14 +332,12 @@ fn jiggle_perspective<F>(img: &Image, mut perspective: helper::Perspective, grid
             } else {
                 perspective.0[j] = old
             }
-            debug(img, Some((grid_size, &perspective)));
         }
 
         for i in 0..8 {
             adjustments[i] *= 0.5f64;
         }
     }
-    debug(img, Some((grid_size, &perspective)));
     perspective
 }
 /* Compute a fitness score for the currently configured perspective

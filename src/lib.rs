@@ -35,11 +35,10 @@ use gnuplot;
 #[cfg(feature = "img")]
 use image;
 
-pub use self::decode::{MetaData, Version};
+pub use self::decode::{MetaData, Version, decode};
 use self::identify::{CapStone, capstones_from_image, find_groupings, Grid, Image, Point};
 
 pub mod decode;
-pub mod galois;
 pub mod identify;
 pub mod version_db;
 
@@ -86,6 +85,7 @@ pub struct Code {
     pub position: Poly,
 }
 
+#[cfg(feature = "img")]
 pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
     let img = img.to_luma();
     let w = img.width() as usize;

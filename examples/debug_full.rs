@@ -273,27 +273,21 @@ fn decode(img: image::GrayImage, update: SyncSender<Update>) {
 
     let mut lasty = 0;
 
-    let caps = rqrr::identify::capstones_from_image_with_debug(&mut code_img, |img, event, x, y| {
-        if lasty <= y && event == "line done" {
-            let px = img.clone();
-            update.send(Update::Scan(px, x, y)).unwrap();
-            lasty = y + 1;
-        }
-    },
-    |_, _, _, _| {
-    });
+    let caps = rqrr::identify::capstones_from_image(&mut code_img);
     update.send(Update::ClearScan).unwrap();
     update.send(Update::Stop).unwrap();
 
     let caps = rqrr::identify::find_groupings(caps);
     for group in caps {
-        let grid = rqrr::identify::Grid::from_group_debug(&mut code_img, group, |img, pers| {
-            update.send(Update::CodeImage(img.w, img.h, img.pixels.to_vec())).unwrap();
+        let grid = rqrr::identify::Grid::from_group(&mut code_img, group);
 
-            if let Some((s, p)) = pers {
-                update.send(Update::Grid(s, p.clone())).unwrap();
-            }
-        });
+        eprintln!("grid = {:#?}", grid);
+        if let Some(grid) = grid {
+            let g = grid.into_grid_image(&code_img);
+            let mut v = Vec::new();
+            rqrr::decode::decode(&g, &mut v);
+            eprintln!("String::from_utf8(v) = {:#?}", String::from_utf8(v));
+        }
     }
 
 }

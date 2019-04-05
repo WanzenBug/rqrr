@@ -13,7 +13,7 @@ pub struct Point {
 
 
 pub use self::image::{PixelColor, Image};
-pub use self::capstone::{CapStone, capstones_from_image, capstones_from_image_with_debug};
+pub use self::capstone::{CapStone, capstones_from_image};
 pub use self::match_capstones::{find_groupings};
 pub use self::grid::Grid;
 pub use self::helper::Perspective;

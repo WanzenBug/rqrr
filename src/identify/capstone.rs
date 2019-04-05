@@ -2,7 +2,7 @@
 use gnuplot;
 
 use crate::Image;
-use crate::identify::{Point};
+use crate::identify::Point;
 
 use super::PixelColor;
 use crate::identify::helper::Perspective;
@@ -37,31 +37,23 @@ impl CapStone {
     }
 }
 
-pub fn capstones_from_image_with_debug<F, G>(img: &mut Image, mut debug: F, mut cap_debug: G) -> Vec<CapStone> where F: FnMut(&Image, &str, ::std::ops::RangeInclusive<usize>, usize), G: FnMut(::std::ops::RangeInclusive<usize>, usize, &PolygonScoreData, &str) {
+pub fn capstones_from_image(img: &mut Image) -> Vec<CapStone> {
     let mut res = Vec::new();
 
     for y in 0..img.h {
         let mut finder = CapStoneFinder::new(img[(0, y)]);
         for x in 1..img.w {
             if finder.check_for_capstone(img[(x, y)]) {
-                debug(img, "maybe cap", x..=x, y);
                 let linepos = finder.get_positions(x);
-                if is_capstone(img, &linepos, y, &mut debug) {
-                    let cap = create_capstone_debug(img, &linepos, y, &mut cap_debug);
-                    debug(img, "is cap", x..=x, y);
+                if is_capstone(img, &linepos, y) {
+                    let cap = create_capstone(img, &linepos, y);
                     res.push(cap);
                 }
             }
-            debug(img, "pixel done", x..=x, y)
         }
-        debug(img, "line done", 0..=img.w-1, y)
     }
 
     res
-}
-
-pub fn capstones_from_image(img: &mut Image) -> Vec<CapStone> {
-    capstones_from_image_with_debug(img, |_, _, _, _| (), |_, _, _,_| ())
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -131,38 +123,28 @@ impl CapStoneFinder {
     }
 }
 
-fn is_capstone<F>(
-    img: &mut Image,
-    linepos: &LinePosition,
-    y: usize,
-    mut debug: F
-) -> bool where F: FnMut(&Image, &str, ::std::ops::RangeInclusive<usize>, usize) {
+fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
     if img[(linepos.left, y)] != img[(linepos.right, y)] || img[(linepos.right, y)] != PixelColor::Black {
         return false;
     }
 
-    debug(img, "paint ring", linepos.left..=linepos.right, y);
-    let (old_ring, ring_count) = img.repaint_and_count((linepos.right, y), PixelColor::CheckCapstone, &mut debug);
+    let (old_ring, ring_count) = img.repaint_and_count((linepos.right, y), PixelColor::CheckCapstone);
 
     // Verify that left is connected to right, and that stone is not connected
     if img[(linepos.left, y)] != PixelColor::CheckCapstone || img[(linepos.stone, y)] == PixelColor::CheckCapstone {
-        debug(img, "invalid connect", linepos.left..=linepos.right, y);
-        img.repaint_and_count((linepos.right, y), old_ring, &mut debug);
+        img.repaint_and_count((linepos.right, y), old_ring);
         return false;
     }
 
-    debug(img, "paint stone", linepos.left..=linepos.right, y);
-    let (old_stone, stone_count) = img.repaint_and_count((linepos.stone, y), PixelColor::CheckCapstone, &mut debug);
+    let (old_stone, stone_count) = img.repaint_and_count((linepos.stone, y), PixelColor::CheckCapstone);
 
     /* Ratio should ideally be 37.5 */
     let ratio = stone_count * 100 / ring_count;
     if ratio < 10 || ratio > 70 {
-        debug(img, "invalid count", linepos.left..=linepos.right, y);
-        img.repaint_and_count((linepos.right, y), old_ring, &mut debug);
-        img.repaint_and_count((linepos.stone, y), old_stone, &mut debug);
+        img.repaint_and_count((linepos.right, y), old_ring);
+        img.repaint_and_count((linepos.stone, y), old_stone);
         return false;
     }
-    debug(img, "is_cap", linepos.left..=linepos.right, y);
     true
 }
 
@@ -171,18 +153,9 @@ fn create_capstone(
     linepos: &LinePosition,
     y: usize,
 ) -> CapStone {
-    create_capstone_debug(img, linepos, y, |_, _, _, _| ())
-}
-
-fn create_capstone_debug<F>(
-    img: &mut Image,
-    linepos: &LinePosition,
-    y: usize,
-    debug: F
-) -> CapStone where F: FnMut(::std::ops::RangeInclusive<usize>, usize, &PolygonScoreData, &str) {
     /* Find the corners of the ring */
-    let corners = find_region_corners_debug(img, linepos.right, y, debug);
-    img.repaint_and_count((linepos.stone, y), PixelColor::CapStone, |_, _, _, _| ());
+    let corners = find_region_corners(img, linepos.right, y);
+    img.repaint_and_count((linepos.stone, y), PixelColor::CapStone);
 
     /* Set up the perspective transform and find the center */
     let c = Perspective::create(
@@ -199,20 +172,7 @@ fn create_capstone_debug<F>(
     }
 }
 
-fn  find_region_corners(
-    img: &mut Image,
-    x: usize,
-    y: usize,
-) {
-    find_region_corners_debug(img, x, y, |_ ,_, _, _|());
-}
-
-fn  find_region_corners_debug<F>(
-    img: &mut Image,
-    x: usize,
-    y: usize,
-    mut debug: F
-) -> [Point; 4] where F: FnMut(::std::ops::RangeInclusive<usize>, usize, &PolygonScoreData, &str) {
+fn find_region_corners(img: &mut Image, x: usize, y: usize) -> [Point; 4] {
     let ix = x as i32;
     let iy = y as i32;
 
@@ -238,7 +198,6 @@ fn  find_region_corners_debug<F>(
     };
     img.flood_fill(x, y, PixelColor::CheckCapstone, PixelColor::FindOneCorner, &mut |_, row| {
         find_one_corner(&mut psd, row.y, row.left, row.right);
-        debug(row.left..=row.right, row.y, &psd, "one");
     });
     psd.ref_0.x = psd.corners[0].x - psd.ref_0.x;
     psd.ref_0.y = psd.corners[0].y - psd.ref_0.y;
@@ -259,7 +218,6 @@ fn  find_region_corners_debug<F>(
     // Recolor to expected color right here
     img.flood_fill(x, y, PixelColor::FindOneCorner, PixelColor::CapStone, &mut |_, row| {
         find_other_corners(&mut psd, row.y, row.left, row.right);
-        debug(row.left..=row.right, row.y, &psd, "rest");
     });
 
     let PolygonScoreData { corners, .. } = psd;

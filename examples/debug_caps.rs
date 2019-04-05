@@ -281,43 +281,7 @@ fn decode(img: image::GrayImage, update: SyncSender<Update>) {
     let mut start_corners = false;
     let mut start_all_corners = false;
 
-    let caps = rqrr::identify::capstones_from_image_with_debug(&mut code_img, |img, event, x, y| {
-        let px = img.clone();
-        match event {
-            "paint ring"
-            | "paint stone" => {
-                update.send(Update::ScanDone).unwrap();
-                update.send(Update::Stop).unwrap();
-            }
-            _ => ()
-        };
-
-        update.send(Update::Scan(px, x, y)).unwrap();
-    },
-                                                    |x, y, psd, ev| {
-                                                        if !start_corners {
-                                                            start_corners = true;
-                                                            update.send(Update::Stop).unwrap();
-                                                        }
-
-                                                        let c = if ev == "one" {
-                                                            Corners(psd.ref_0.clone(), psd.corners[0].clone(), None)
-                                                        } else {
-                                                            if !start_all_corners {
-                                                                start_all_corners = true;
-                                                                update.send(Update::Stop).unwrap();
-                                                            }
-
-                                                            Corners(psd.ref_0.clone(),
-                                                                    psd.corners[0].clone(),
-                                                                    Some([
-                                                                        psd.corners[1].clone(),
-                                                                        psd.corners[2].clone(),
-                                                                        psd.corners[3].clone(),
-                                                                    ]))
-                                                        };
-                                                        update.send(Update::Corners(x, y, c)).unwrap();
-                                                    });
+    let caps = rqrr::identify::capstones_from_image(&mut code_img);
     update.send(Update::ScanDone).unwrap();
 
     if caps.len() > 0 {

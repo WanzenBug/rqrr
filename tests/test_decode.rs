@@ -27,10 +27,10 @@ fn test_decode() {
     let grid = rqrr::SimpleGridImage::from_func(code.size() as usize, |x, y| {
         code.get_module(x as i32, y as i32)
     });
-//    let mut vec = Vec::new();
-//    let dec = grid.decode(&mut vec).unwrap();
-//    assert_eq!(dec.mask, 3);
-//    assert_eq!(dec.ecc_level, 2);
-//    assert_eq!(dec.version.to_size(), code.size() as usize);
-//    assert_eq!(&vec[..], b"abcdefghijklmnopqrstuvwxyz0123456789".as_ref());
+    let mut vec = Vec::new();
+    let dec = rqrr::decode(&grid, &mut vec).unwrap();
+    assert_eq!(dec.mask, 3);
+    assert_eq!(dec.ecc_level, 2);
+    assert_eq!(dec.version.to_size(), code.size() as usize);
+    assert_eq!(&vec[..], b"abcdefghijklmnopqrstuvwxyz0123456789".as_ref());
 }

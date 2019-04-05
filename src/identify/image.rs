@@ -95,7 +95,7 @@ impl Image {
         }
     }
 
-    pub(crate) fn repaint_and_count<F>(&mut self, (x, y): (usize, usize), target_color: PixelColor, mut debug: F) -> (PixelColor, usize) where F: FnMut(&Image, &str, ::std::ops::RangeInclusive<usize>, usize) {
+    pub(crate) fn repaint_and_count(&mut self, (x, y): (usize, usize), target_color: PixelColor) -> (PixelColor, usize) {
         let src_color = self[(x, y)];
 
         if src_color == target_color {
@@ -107,7 +107,6 @@ impl Image {
             let count_ref = &mut count;
             self.flood_fill(x, y, src_color, target_color, &mut |img, row| {
                 *count_ref += row.right - row.left + 1;
-                debug(img, "fill", row.left..=row.right, row.y);
             });
         }
         (src_color, count)
@@ -400,7 +399,7 @@ mod tests {
             [1, 1, 1],
         ]);
 
-        let (old, c) = test_u.repaint_and_count((0, 0), PixelColor::CapStone, |_, _, _, _|());
+        let (old, c) = test_u.repaint_and_count((0, 0), PixelColor::CapStone);
         assert_eq!(c, 7);
         assert_eq!(old, PixelColor::Black);
         for x in 0..3 {

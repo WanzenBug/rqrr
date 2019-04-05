@@ -1,8 +1,13 @@
 use crate::{DeQRError, DeQRResult, GridImage};
 use crate::version_db::{RSParameters, VERSION_DATA_BASE};
-use crate::galois::{GF16, GF256, GaloisField};
 use std::io::Write;
 use std::mem;
+
+use g2p::{g2p, GaloisField};
+use std::fmt::Debug;
+
+g2p!(GF16, 4, modulus: 0b1_0011);
+g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
 const MAX_PAYLOAD_SIZE: usize = 8896;
 
@@ -387,7 +392,7 @@ fn correct_block(
 
     /* Find error locations and magnitudes */
     for i in 0..ecc.bs {
-        let xinv = GF256::pow(255 - i);
+        let xinv = GF256::GENERATOR.pow(255 - i);
         if poly_eval(&sigma, xinv) == GF256::ZERO {
             let sd_x = poly_eval(&sigma_deriv, xinv);
             let omega_x = poly_eval(&omega, xinv);
@@ -416,7 +421,7 @@ fn block_syndromes(
     for i in 0..npar {
         for j in 0..block.len() {
             let c = GF256(block[block.len() - 1 - j]);
-            s[i] += c * GF256::pow(i * j);
+            s[i] += c * GF256::GENERATOR.pow(i * j);
         }
         if s[i] != GF256::ZERO {
             nonzero = true;
@@ -465,7 +470,7 @@ fn eloc_poly(
 fn berlekamp_massey<G>(
     s: &[G; 64],
     n: usize,
-) -> [G; 64] where G: GaloisField {
+) -> [G; 64] where G: GaloisField + Debug {
     let mut ts: [G; 64] = [G::ZERO; 64];
     let mut cs: [G; 64] = [G::ZERO; 64];
     let mut bs: [G; 64] = [G::ZERO; 64];
@@ -677,7 +682,7 @@ fn correct_format(mut word: u16) -> DeQRResult<u16> {
 
         /* Now, find the roots of the polynomial */
         for i in 0..15 {
-            if poly_eval(&sigma, GF16::pow(15 - i)) == GF16::ZERO {
+            if poly_eval(&sigma, GF16::GENERATOR.pow(15 - i)) == GF16::ZERO {
                 word ^= 1 << i;
             }
         }
@@ -741,7 +746,7 @@ fn format_syndromes(u: u16) -> Result<[GF16; 64], [GF16; 64]> {
     for i in 0..6 {
         for j in 0..15 {
             if u & (1 << j) != 0 {
-                result[i] += GF16::pow((i + 1) * j);
+                result[i] += GF16::GENERATOR.pow((i + 1) * j);
             }
         }
         if result[i].0 != 0 {
