@@ -36,7 +36,7 @@ use gnuplot;
 use image;
 
 pub use self::decode::{MetaData, Version, decode};
-use self::identify::{CapStone, capstones_from_image, find_groupings, Grid, Image, Point};
+pub use self::identify::{CapStone, capstones_from_image, find_groupings, Grid, Image, Point};
 
 pub mod decode;
 pub mod identify;
@@ -48,7 +48,7 @@ pub struct Poly([Point; 4]);
 
 pub trait GridImage {
     fn size(&self) -> usize;
-    fn bit(&self, x: usize, y: usize) -> bool;
+    fn bit(&self, y: usize, x: usize) -> bool;
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +96,28 @@ pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
     })
 }
 
+#[cfg(feature = "img")]
+pub fn find_from_image(img: &image::DynamicImage) -> (Image, Vec<Grid>) {
+    let img = img.to_luma();
+    let w = img.width() as usize;
+    let h = img.height() as usize;
+
+    find_from_func(w, h, |x, y| {
+        img.get_pixel(x as u32, y as u32).data[0]
+    })
+}
+
+
+pub fn find_from_func<F>(width: usize, height: usize, fill: F) -> (Image, Vec<Grid>) where F: FnMut(usize, usize) -> u8 {
+    let mut img = Image::from_greyscale(width, height, fill);
+    let caps = capstones_from_image(&mut img);
+    let groups = find_groupings(caps);
+    let grids: Vec<_> = groups.into_iter()
+        .filter_map(|group| Grid::from_group(&mut img, group))
+        .collect();
+
+    (img, grids)
+}
 
 /// Find QR-Codes and decode them
 ///
@@ -128,14 +150,8 @@ pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
 /// assert_eq!(codes[0].val, "http://qr2.it/Go/24356");
 /// ```
 pub fn find_and_decode_from_func<F>(width: usize, height: usize, fill: F) -> Vec<Code> where F: FnMut(usize, usize) -> u8 {
-    let mut img = Image::from_greyscale(width, height, fill);
+    let (img, grids) = find_from_func(width, height, fill);
     let mut ret = Vec::new();
-    let caps = capstones_from_image(&mut img);
-    let groups = find_groupings(caps);
-    let grids: Vec<_> = groups.into_iter()
-        .filter_map(|group| Grid::from_group(&mut img, group))
-        .collect();
-
     for grid in grids {
         let mut decode_val = Vec::new();
 
@@ -167,7 +183,7 @@ impl GridImage for SimpleGridImage {
         self.size
     }
 
-    fn bit(&self, x: usize, y: usize) -> bool {
+    fn bit(&self, y: usize, x: usize) -> bool {
         let c = y * self.size + x;
         self.cell_bitmap[c >> 3] & (1 << (c & 7) as u8) != 0
     }

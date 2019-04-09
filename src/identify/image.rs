@@ -105,7 +105,7 @@ impl Image {
         let mut count = 0;
         {
             let count_ref = &mut count;
-            self.flood_fill(x, y, src_color, target_color, &mut |img, row| {
+            self.flood_fill(x, y, src_color, target_color, &mut |row| {
                 *count_ref += row.right - row.left + 1;
             });
         }
@@ -119,7 +119,7 @@ impl Image {
         y: usize,
         from: PixelColor,
         to: PixelColor,
-        func: &mut FnMut(&Image, Row) -> (),
+        func: &mut FnMut(Row) -> (),
     ) {
         assert_ne!(from, to);
 
@@ -151,7 +151,7 @@ impl Image {
                 }
             }
 
-            func(self, Row {
+            func(Row {
                 left,
                 right,
                 y,
@@ -296,7 +296,7 @@ mod tests {
             [1, 1, 1],
         ]);
 
-        test_full.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_, _| ());
+        test_full.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
@@ -313,7 +313,7 @@ mod tests {
             [1, 0, 1],
         ]);
 
-        test_single.flood_fill(1, 1, PixelColor::Black, PixelColor::CapStone, &mut |_, _| ());
+        test_single.flood_fill(1, 1, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
@@ -339,7 +339,7 @@ mod tests {
             [1, 1, 1],
         ]);
 
-        test_ring.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_, _| ());
+        test_ring.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
@@ -361,7 +361,7 @@ mod tests {
         ]);
 
 
-        test_u.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_, _| ());
+        test_u.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
@@ -382,7 +382,7 @@ mod tests {
             [0, 0, 0],
         ]);
 
-        test_empty.flood_fill(1, 1, PixelColor::Black, PixelColor::CapStone, &mut |_, _| ());
+        test_empty.flood_fill(1, 1, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {

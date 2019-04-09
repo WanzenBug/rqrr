@@ -8,6 +8,7 @@ authors = ["WanzenBug <moritz9422@gmail.com>"]
 [features]
 examples = ["piston", "piston2d-graphics", "pistoncore-glutin_window", "piston2d-opengl_graphics", "img"]
 img = ["image"]
+all = ["examples", "img"]
 
 [[example]]
 name = "debug_full"
@@ -19,6 +20,10 @@ name = "debug_caps"
 path = "examples/debug_caps.rs"
 required-features = ["examples"]
 
+[[test]]
+name = "test_load"
+path = "tests/test_load.rs"
+required-features = ["img"]
 
 [dev-dependencies]
 qrcodegen = "1.3"

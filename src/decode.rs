@@ -4,7 +4,6 @@ use std::io::Write;
 use std::mem;
 
 use g2p::{g2p, GaloisField};
-use std::fmt::Debug;
 
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
@@ -470,7 +469,7 @@ fn eloc_poly(
 fn berlekamp_massey<G>(
     s: &[G; 64],
     n: usize,
-) -> [G; 64] where G: GaloisField + Debug {
+) -> [G; 64] where G: GaloisField {
     let mut ts: [G; 64] = [G::ZERO; 64];
     let mut cs: [G; 64] = [G::ZERO; 64];
     let mut bs: [G; 64] = [G::ZERO; 64];
@@ -574,11 +573,11 @@ fn read_data(
 fn read_bit(
     code: &GridImage,
     meta: &MetaData,
-    i: usize,
-    j: usize,
+    y: usize,
+    x: usize,
 ) -> bool {
-    let mut v = code.bit(j, i) as u8;
-    if mask_bit(meta.mask, i, j) {
+    let mut v = code.bit(y, x) as u8;
+    if mask_bit(meta.mask, y, x) {
         v ^= 1
     }
     v != 0
@@ -586,18 +585,18 @@ fn read_bit(
 
 fn mask_bit(
     mask: u16,
-    i: usize,
-    j: usize,
+    y: usize,
+    x: usize,
 ) -> bool {
     match mask {
-        0 => 0 == (i + j) % 2,
-        1 => 0 == i % 2,
-        2 => 0 == j % 3,
-        3 => 0 == (i + j) % 3,
-        4 => 0 == ((i / 2) + (j / 3)) % 2,
-        5 => 0 == ((i * j) % 2 + (i * j)) % 3,
-        6 => 0 == ((i * j) % 2 + (i * j) % 3) % 2,
-        7 => 0 == ((i * j) % 3 + (i + j) % 2) % 2,
+        0 => 0 == (y + x) % 2,
+        1 => 0 == y % 2,
+        2 => 0 == x % 3,
+        3 => 0 == (y + x) % 3,
+        4 => 0 == ((y / 2) + (x / 3)) % 2,
+        5 => 0 == ((y * x) % 2 + (y * x) % 3),
+        6 => 0 == ((y * x) % 2 + (y * x) % 3) % 2,
+        7 => 0 == ((y * x) % 3 + (y + x) % 2) % 2,
         _ => false,
     }
 }
@@ -705,7 +704,7 @@ fn read_format(code: &GridImage) -> DeQRResult<MetaData> {
         0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8
     ];
     for i in (0..15).rev() {
-        format = (format << 1) | code.bit(XS[i], YS[i]) as u16;
+        format = (format << 1) | code.bit(YS[i], XS[i]) as u16;
     }
     format ^= 0x5412;
 
@@ -714,10 +713,10 @@ fn read_format(code: &GridImage) -> DeQRResult<MetaData> {
     let verified_format = correct_format(format).or_else(|_| {
         let mut format = 0;
         for i in 0..7 {
-            format = (format << 1) | code.bit(8, code.size() - 1 - i) as u16;
+            format = (format << 1) | code.bit(code.size() - 1 - i, 8) as u16;
         }
         for i in 0..8 {
-            format = (format << 1) | code.bit(code.size() - 8 + i, 8) as u16;
+            format = (format << 1) | code.bit(8, code.size() - 8 + i) as u16;
         }
         format ^= 0x5412;
         correct_format(format)

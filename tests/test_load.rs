@@ -1,11 +1,23 @@
-extern crate rqrr;
-extern crate qrcodegen;
+use rqrr;
+use image;
 
 use rqrr::GridImage;
 
+fn test_data(buffer: &[u8]) -> (rqrr::Image, Vec<rqrr::Grid>) {
+    let img = image::load_from_memory(buffer).unwrap();
+    rqrr::find_from_image(&img)
+}
+
 #[test]
-fn test_deqr() {
-    let grid = [
+fn test_small_deqr() {
+    let buffer = include_bytes!("data/deqr.gif");
+    let (img, mut grids) = test_data(buffer);
+
+    assert_eq!(1, grids.len());
+    let c = grids.pop().unwrap();
+    let grid = c.into_grid_image(&img);
+    assert_eq!(21, grid.size());
+    let cmp = [
         [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
         [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
         [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
@@ -29,31 +41,24 @@ fn test_deqr() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, ],
     ];
 
-    let img = rqrr::SimpleGridImage::from_func(21, |x, y| {
-        grid[y][x] == 1
-    });
-
-    let mut buf = vec![0; img.size() * img.size() / 8 + 1];
-    for y in 0..img.size() {
-        for x in 0..img.size() {
-            let i = y * img.size() + x;
-            if img.bit(y, x) {
-                buf[i >> 3] |= 1 << ((i & 7) as u8);
-            }
+    for x in 0..grid.size() {
+        for y in 0..grid.size() {
+            assert_eq!(cmp[y][x] == 1, grid.bit(y, x))
         }
     }
-    let formated: Vec<String> = buf.iter().map(|b| format!("\\x{:02X}", b)).collect();
-    eprintln!("quirc-buf = {}", formated.join(""));
-
-    let mut vec = Vec::new();
-    rqrr::decode(&img, &mut vec).unwrap();
-
-    assert_eq!(b"deqr".as_ref(), &vec[..])
 }
 
 #[test]
-fn test_github() {
-    let grid =  [
+fn test_small_github() {
+    let buffer = include_bytes!("data/github.gif");
+    let (img, mut grids) = test_data(buffer);
+
+    assert_eq!(1, grids.len());
+    let c = grids.pop().unwrap();
+    let grid = c.into_grid_image(&img);
+    assert_eq!(29, grid.size());
+
+    let cmp = [
         [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
         [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
         [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
@@ -85,31 +90,23 @@ fn test_github() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, ]
     ];
 
-    let img = rqrr::SimpleGridImage::from_func(29, |x, y| {
-        grid[y][x] == 1
-    });
-
-    let mut buf = vec![0; img.size() * img.size() / 8 + 1];
-    for y in 0..img.size() {
-        for x in 0..img.size() {
-            let i = y * img.size() + x;
-            if img.bit(y, x) {
-                buf[i >> 3] |= 1 << ((i & 7) as u8);
-            }
+    for x in 0..grid.size() {
+        for y in 0..grid.size() {
+            assert_eq!(cmp[y][x] == 1, grid.bit(y, x))
         }
     }
-    let formated: Vec<String> = buf.iter().map(|b| format!("\\x{:02X}", b)).collect();
-    eprintln!("quirc-buf = {}", formated.join(""));
-
-    let mut vec = Vec::new();
-    rqrr::decode(&img, &mut vec).unwrap();
-
-    assert_eq!(b"https://github.com/WanzenBug/de-qr".as_ref(), &vec[..])
 }
 
 #[test]
-fn test_number() {
-    let grid =  [
+fn test_small_number() {
+    let buffer = include_bytes!("data/number.gif");
+    let (img, mut grids) = test_data(buffer);
+
+    assert_eq!(1, grids.len());
+    let c = grids.pop().unwrap();
+    let grid = c.into_grid_image(&img);
+    assert_eq!(29, grid.size());
+    let cmp = [
         [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
         [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
         [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1],
@@ -141,25 +138,9 @@ fn test_number() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]
     ];
 
-    let img = rqrr::SimpleGridImage::from_func(29, |x, y| {
-        grid[y][x] == 1
-    });
-
-    let mut buf = vec![0; img.size() * img.size() / 8 + 1];
-    for y in 0..img.size() {
-        for x in 0..img.size() {
-            let i = y * img.size() + x;
-            if img.bit(y, x) {
-                buf[i >> 3] |= 1 << ((i & 7) as u8);
-            }
+    for x in 0..grid.size() {
+        for y in 0..grid.size() {
+            assert_eq!(cmp[y][x] == 1, grid.bit(y, x))
         }
     }
-    let formated: Vec<String> = buf.iter().map(|b| format!("\\x{:02X}", b)).collect();
-    eprintln!("quirc-buf = {}", formated.join(""));
-
-    let mut vec = Vec::new();
-    rqrr::decode(&img, &mut vec).unwrap();
-
-    assert_eq!(b"1234567891011121314151617181920".as_ref(), &vec[..])
 }
-

@@ -196,7 +196,7 @@ fn find_region_corners(img: &mut Image, x: usize, y: usize) -> [Point; 4] {
             Default::default(),
         ],
     };
-    img.flood_fill(x, y, PixelColor::CheckCapstone, PixelColor::FindOneCorner, &mut |_, row| {
+    img.flood_fill(x, y, PixelColor::CheckCapstone, PixelColor::FindOneCorner, &mut |row| {
         find_one_corner(&mut psd, row.y, row.left, row.right);
     });
     psd.ref_0.x = psd.corners[0].x - psd.ref_0.x;
@@ -216,7 +216,7 @@ fn find_region_corners(img: &mut Image, x: usize, y: usize) -> [Point; 4] {
     psd.scores[1] = i;
     psd.scores[3] = -i;
     // Recolor to expected color right here
-    img.flood_fill(x, y, PixelColor::FindOneCorner, PixelColor::CapStone, &mut |_, row| {
+    img.flood_fill(x, y, PixelColor::FindOneCorner, PixelColor::CapStone, &mut |row| {
         find_other_corners(&mut psd, row.y, row.left, row.right);
     });
 

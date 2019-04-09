@@ -77,7 +77,7 @@ impl Grid {
                 align.y as usize,
                 PixelColor::FindAlignment,
                 PixelColor::Alignment,
-                &mut |_, row| {
+                &mut |row| {
                     find_leftmost_to_line(&hd, &mut best_fit, &mut score, row.y, row.left, row.right);
                 });
             align = best_fit;
@@ -112,7 +112,7 @@ impl<'a> GridImage for RefGridImage<'a> {
         self.grid.grid_size
     }
 
-    fn bit(&self, x: usize, y: usize) -> bool {
+    fn bit(&self, y: usize, x: usize) -> bool {
         let p = self.grid.c.map(x as f64 + 0.5, y as f64 + 0.5);
         self.img[p] != PixelColor::White
     }
