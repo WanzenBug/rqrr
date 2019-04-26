@@ -1,5 +1,4 @@
 extern crate rqrr;
-extern crate qrcodegen;
 
 use rqrr::GridImage;
 

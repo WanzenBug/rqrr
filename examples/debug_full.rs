@@ -108,8 +108,6 @@ impl App {
                         self.internal.overlay = Some(tex);
                     }
                     Update::Scan(img, x, y) => {
-                        let tex = to_texture(img.w, img.h, &img.pixels);
-                        self.internal.overlay = Some(tex);
                         self.internal.cursor = Some((*x.start(), y));
                     }
                     Update::Cap(cap) => {
@@ -171,16 +169,12 @@ fn to_texture(w: usize, h: usize, buf: &[rqrr::identify::PixelColor]) -> Texture
         let p = buf[y as usize * w + x as usize];
         use rqrr::identify::PixelColor::*;
         let col = match p {
-            White
-            | TimingWhite => {
+            White => {
                 [255, 255, 255, 255]
             }
-            Black
-            | TimingBlack => {
+            Black => {
                 [0, 0, 0, 255]
             }
-            CheckCapstone => [128, 0, 0, 255],
-            CapStone => [255, 0, 0, 255],
             _ => {
                 [0, 255, 0, 255]
             }
@@ -264,10 +258,9 @@ fn decode(img: image::GrayImage, update: SyncSender<Update>) {
     let h = img.height() as usize;
 
     let img_lock = update.clone();
-    let mut code_img = rqrr::identify::Image::from_greyscale_debug(w, h, |x, y| {
+    let mut code_img = rqrr::identify::Image::from_greyscale(w, h, |x, y| {
         img.get_pixel(x as u32, y as u32).data[0]
-    }, |w, h, px| update.send(Update::CodeImage(w, h, px.to_vec())).unwrap(),
-    );
+    });
 
     update.send(Update::Stop).unwrap();
 
