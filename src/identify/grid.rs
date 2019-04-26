@@ -7,19 +7,19 @@ use crate::{
     CapStone,
     GridImage,
     identify::{
-        match_capstones::CapStoneGroup,
         image::Region,
+        match_capstones::CapStoneGroup,
     },
     Image,
     version_db::VERSION_DATA_BASE,
 };
+use crate::identify::image::{AreaFiller, Row};
 
 use super::{
     helper,
     PixelColor,
     Point,
 };
-use crate::identify::image::{AreaFiller, Row};
 
 #[derive(Debug, Clone)]
 pub struct Grid {
@@ -118,26 +118,6 @@ impl<'a> GridImage for RefGridImage<'a> {
         PixelColor::White != self.img[p]
     }
 }
-
-impl<'a> RefGridImage<'a> {
-    #[cfg(feature = "debug-plot")]
-    pub fn plot<'b>(&self, ax: &'b mut gnuplot::Axes2D) -> &'b mut gnuplot::Axes2D {
-        for x in 0..=self.grid.grid_size {
-            let from = self.grid.c.map(x as f64, 0.0);
-            let to = self.grid.c.map(x as f64, self.grid.grid_size as f64);
-            ax.lines(&[from.x, to.x, ], &[from.y, to.y, ], &[gnuplot::Color("white")]);
-        }
-
-        for y in 0..=self.grid.grid_size {
-            let from = self.grid.c.map(0.0, y as f64);
-            let to = self.grid.c.map(self.grid.grid_size as f64, y as f64);
-            ax.lines(&[from.x, to.x, ], &[from.y, to.y, ], &[gnuplot::Color("white")]);
-        }
-
-        ax
-    }
-}
-
 
 fn setup_perspective(img: &Image, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective {
     let inital = helper::Perspective::create(&[

@@ -3,11 +3,7 @@ use std::ops::Index;
 use std::ops::IndexMut;
 use std::ops::Range;
 
-#[cfg(feature = "debug-plot")]
-use gnuplot::Axes2D;
-
 use crate::identify::Point;
-
 
 #[derive(Clone)]
 pub struct Image {
@@ -345,7 +341,6 @@ impl IndexMut<(usize, usize)> for Image {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     fn img_from_array(array: [[u8; 3]; 3]) -> Image {
         let mut pixels = Vec::new();

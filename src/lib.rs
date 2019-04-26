@@ -30,12 +30,10 @@
 //! assert_eq!(codes.len(), 1);
 //! assert_eq!(codes[0].val, "http://qr2.it/Go/24356");
 //! ```
-#[cfg(feature = "debug-plot")]
-use gnuplot;
 #[cfg(feature = "img")]
 use image;
 
-pub use self::decode::{MetaData, Version, decode};
+pub use self::decode::{decode, MetaData, Version};
 pub use self::identify::{CapStone, capstones_from_image, find_groupings, Grid, Image, Point};
 
 pub mod decode;

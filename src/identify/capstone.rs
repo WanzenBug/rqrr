@@ -1,11 +1,12 @@
-#[cfg(feature = "debug-plot")]
-use gnuplot;
-
-use crate::identify::image::{Region, Image, Row};
-use crate::identify::Point;
+use crate::{
+    identify::{
+        Point,
+        image::{Region, Image, Row},
+        helper::Perspective,
+    }
+};
 
 use super::PixelColor;
-use crate::identify::helper::Perspective;
 
 #[derive(Debug, Clone)]
 pub struct CapStone {
@@ -19,22 +20,6 @@ pub struct PolygonScoreData {
     pub ref_0: Point,
     pub scores: [i32; 4],
     pub corners: [Point; 4],
-}
-
-
-impl CapStone {
-    #[cfg(feature = "debug-plot")]
-    pub fn plot(&self, fig: &mut gnuplot::Axes2D) {
-        fig.lines(self.corners.iter()
-                      .cycle()
-                      .take(5)
-                      .map(|p| p.x),
-                  self.corners.iter()
-                      .cycle()
-                      .take(5)
-                      .map(|p| p.y),
-                  &[gnuplot::Color("green"), gnuplot::LineWidth(4.0)]);
-    }
 }
 
 pub fn capstones_from_image(img: &mut Image) -> Vec<CapStone> {
