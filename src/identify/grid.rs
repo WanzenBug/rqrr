@@ -6,7 +6,10 @@ use std::{
 use crate::{
     CapStone,
     GridImage,
-    identify::match_capstones::CapStoneGroup,
+    identify::{
+        match_capstones::CapStoneGroup,
+        image::Region,
+    },
     Image,
     version_db::VERSION_DATA_BASE,
 };
@@ -16,6 +19,7 @@ use super::{
     PixelColor,
     Point,
 };
+use crate::identify::image::{AreaFiller, Row};
 
 #[derive(Debug, Clone)]
 pub struct Grid {
@@ -70,20 +74,17 @@ impl Grid {
         if grid_size > 21 {
             /* Try to find the actual location of the alignment pattern. */
             align = find_alignment_pattern(img, align, &group.0, &group.2)?;
-            let mut best_fit = align.clone();
-            let mut score = -hd.y * best_fit.x + hd.x * best_fit.y;
-            img.flood_fill(
-                align.x as usize,
-                align.y as usize,
-                PixelColor::FindAlignment,
-                PixelColor::Alignment,
-                &mut |row| {
-                    find_leftmost_to_line(&hd, &mut best_fit, &mut score, row.y, row.left, row.right);
-                });
-            align = best_fit;
+            let score = -hd.y * align.x + hd.x * align.y;
+            let finder = LeftMostFinder {
+                line_p: hd,
+                best: align,
+                score,
+            };
+            let found = img.repaint_and_apply((align.x as usize, align.y as usize),PixelColor::Alignment, finder);
+            align = found.best;
         }
 
-        let c = setup_perspective(img, &group, align.clone(), grid_size);
+        let c = setup_perspective(img, &group, align, grid_size);
         let caps = [group.0, group.1, group.2];
 
         Some(Grid {
@@ -114,7 +115,7 @@ impl<'a> GridImage for RefGridImage<'a> {
 
     fn bit(&self, y: usize, x: usize) -> bool {
         let p = self.grid.c.map(x as f64 + 0.5, y as f64 + 0.5);
-        self.img[p] != PixelColor::White
+        PixelColor::White != self.img[p]
     }
 }
 
@@ -175,7 +176,7 @@ fn rotate_capstone(
 // * a horizontal and a vertical timing scan.
 // */
 fn measure_timing_pattern(
-    img: &mut Image,
+    img: &Image,
     caps: &CapStoneGroup,
 ) -> usize {
     const US: [f64; 3] = [6.5f64, 6.5f64, 0.5f64];
@@ -197,7 +198,7 @@ fn measure_timing_pattern(
 }
 
 fn timing_scan(
-    img: &mut Image,
+    img: &Image,
     p0: &Point,
     p1: &Point,
 ) -> usize {
@@ -205,15 +206,13 @@ fn timing_scan(
     let mut count = 0;
     for p in helper::BresenhamScan::new(p0, p1) {
         let pixel = img[p];
-        if pixel != PixelColor::White && pixel != PixelColor::TimingWhite {
+        if PixelColor::White != pixel {
             if run_length >= 2 {
                 count += 1
             }
             run_length = 0;
-            img[p] = PixelColor::TimingBlack;
         } else {
             run_length += 1;
-            img[p] = PixelColor::TimingWhite;
         }
     }
 
@@ -238,7 +237,6 @@ fn find_alignment_pattern(img: &mut Image, mut align_seed: Point, c0: &CapStone,
      */
     let mut dir = 0;
     let mut step_size = 1;
-    let mut unsuccessful_searches = Vec::new();
 
     while step_size * step_size < size_estimate * 100 {
         const DX_MAP: [i32; 4] = [1, 0, -1, 0];
@@ -248,18 +246,16 @@ fn find_alignment_pattern(img: &mut Image, mut align_seed: Point, c0: &CapStone,
             let y = align_seed.y as usize;
 
             // Alignment pattern should not be white
+            if PixelColor::White != img[(x, y)] {
+                let region = img.get_region((x, y));
+                let count = match region {
+                    Region::Unclaimed { pixel_count, .. } => { pixel_count }
+                    _ => continue,
+                };
 
-            let cur_px = img[(x, y)];
-            if cur_px != PixelColor::White && cur_px != PixelColor::FindAlignment {
-                let (old, count) = img.repaint_and_count((x, y), PixelColor::FindAlignment);
+                // Matches expected size of alignment pattern
                 if count >= size_estimate / 2 && count <= size_estimate * 2 {
-                    for (x, y, color) in unsuccessful_searches.into_iter() {
-                        img.repaint_and_count((x, y), color);
-                    }
-
                     return Some(align_seed);
-                } else {
-                    unsuccessful_searches.push((x, y, old));
                 }
             }
 
@@ -273,28 +269,30 @@ fn find_alignment_pattern(img: &mut Image, mut align_seed: Point, c0: &CapStone,
             step_size += 1
         }
     }
-
-    for (x, y, color) in unsuccessful_searches.into_iter() {
-        img.repaint_and_count((x, y), color);
-    }
-
     None
 }
 
-fn find_leftmost_to_line(
-    line_p: &Point,
-    best: &mut Point,
-    score: &mut i32,
-    y: usize,
-    left: usize,
-    right: usize,
-) {
-    for x in &[left, right] {
-        let d = -line_p.y * (*x as i32) + line_p.x * y as i32;
-        if d < *score {
-            *score = d;
-            best.x = *x as i32;
-            best.y = y as i32;
+struct LeftMostFinder {
+    line_p: Point,
+    best: Point,
+    score: i32,
+}
+
+impl AreaFiller for LeftMostFinder {
+    fn update(&mut self, row: Row) {
+        let left_d = -self.line_p.y * (row.left as i32) + self.line_p.x * row.y as i32;
+        let right_d = -self.line_p.y * (row.right as i32) + self.line_p.x * row.y as i32;
+
+        if left_d < self.score {
+            self.score = left_d;
+            self.best.x = row.left as i32;
+            self.best.y = row.y as i32;
+        }
+
+        if right_d < self.score {
+            self.score = right_d;
+            self.best.x = row.right as i32;
+            self.best.y = row.y as i32;
         }
     }
 }
@@ -417,8 +415,8 @@ fn fitness_cell(
     for v in 0..3 {
         for u in 0..3 {
             let p = perspective.map(x as f64 + OFFSETS[u], y as f64 + OFFSETS[v]);
-            if !(p.y < 0 || p.y as usize >= img.h || p.x < 0 || p.x as usize >= img.w) {
-                if img[p] != PixelColor::White {
+            if !(p.y < 0 || p.y as usize >= img.height() || p.x < 0 || p.x as usize >= img.width()) {
+                if PixelColor::White != img[p] {
                     score += 1
                 } else {
                     score -= 1

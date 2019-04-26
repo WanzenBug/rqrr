@@ -1,7 +1,7 @@
 #[cfg(feature = "debug-plot")]
 use gnuplot;
 
-use crate::Image;
+use crate::identify::image::{Region, Image, Row};
 use crate::identify::Point;
 
 use super::PixelColor;
@@ -40,10 +40,10 @@ impl CapStone {
 pub fn capstones_from_image(img: &mut Image) -> Vec<CapStone> {
     let mut res = Vec::new();
 
-    for y in 0..img.h {
-        let mut finder = CapStoneFinder::new(img[(0, y)]);
-        for x in 1..img.w {
-            if finder.check_for_capstone(img[(x, y)]) {
+    for y in 0..img.height() {
+        let mut finder = CapStoneFinder::new(img[(0, y)].into());
+        for x in 1..img.width() {
+            if finder.check_for_capstone(img[(x, y)].into()) {
                 let linepos = finder.get_positions(x);
                 if is_capstone(img, &linepos, y) {
                     let cap = create_capstone(img, &linepos, y);
@@ -124,28 +124,35 @@ impl CapStoneFinder {
 }
 
 fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
-    if img[(linepos.left, y)] != img[(linepos.right, y)] || img[(linepos.right, y)] != PixelColor::Black {
+    let ring_reg = img.get_region((linepos.right, y));
+    let stone_reg = img.get_region((linepos.stone, y));
+
+    if img[(linepos.left, y)] != img[(linepos.right, y)] {
         return false;
     }
 
-    let (old_ring, ring_count) = img.repaint_and_count((linepos.right, y), PixelColor::CheckCapstone);
+    match (ring_reg, stone_reg) {
+        (
+            Region::Unclaimed {
+                color: ring_color,
+                pixel_count: ring_count,
+                ..
+            },
+            Region::Unclaimed {
+                color: stone_color,
+                pixel_count: stone_count,
+                ..
+            }
+        ) => {
 
-    // Verify that left is connected to right, and that stone is not connected
-    if img[(linepos.left, y)] != PixelColor::CheckCapstone || img[(linepos.stone, y)] == PixelColor::CheckCapstone {
-        img.repaint_and_count((linepos.right, y), old_ring);
-        return false;
+
+            let ratio = stone_count * 100 / ring_count;
+            // Verify that left is connected to right, and that stone is not connected
+            // Also that the pixel counts roughly repsect the 37.5% ratio
+            ring_color != stone_color && 10 < ratio && ratio < 70
+        }
+        _ => false,
     }
-
-    let (old_stone, stone_count) = img.repaint_and_count((linepos.stone, y), PixelColor::CheckCapstone);
-
-    /* Ratio should ideally be 37.5 */
-    let ratio = stone_count * 100 / ring_count;
-    if ratio < 10 || ratio > 70 {
-        img.repaint_and_count((linepos.right, y), old_ring);
-        img.repaint_and_count((linepos.stone, y), old_stone);
-        return false;
-    }
-    true
 }
 
 fn create_capstone(
@@ -154,8 +161,13 @@ fn create_capstone(
     y: usize,
 ) -> CapStone {
     /* Find the corners of the ring */
-    let corners = find_region_corners(img, linepos.right, y);
-    img.repaint_and_count((linepos.stone, y), PixelColor::CapStone);
+    let start_point = Point { x: linepos.right as i32, y: y as i32 };
+    let mut first_corner_finder = FirstCornerFinder::new(start_point);
+    img.repaint_and_apply((linepos.right, y), PixelColor::Tmp1, |row| first_corner_finder.update(row));
+    let mut all_corner_finder = AllCornerFinder::new(start_point, first_corner_finder.best());
+    // Recolor to expected color right here
+    img.repaint_and_apply((linepos.right, y), PixelColor::CapStone, |row| all_corner_finder.update(row));
+    let corners = all_corner_finder.best();
 
     /* Set up the perspective transform and find the center */
     let c = Perspective::create(
@@ -172,98 +184,105 @@ fn create_capstone(
     }
 }
 
-fn find_region_corners(img: &mut Image, x: usize, y: usize) -> [Point; 4] {
-    let ix = x as i32;
-    let iy = y as i32;
-
-    let ref_0 = Point {
-        x: ix,
-        y: iy,
-    };
-
-    let mut psd = PolygonScoreData {
-        ref_0: ref_0.clone(),
-        scores: [
-            -1,
-            0,
-            0,
-            0,
-        ],
-        corners: [
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        ],
-    };
-    img.flood_fill(x, y, PixelColor::CheckCapstone, PixelColor::FindOneCorner, &mut |row| {
-        find_one_corner(&mut psd, row.y, row.left, row.right);
-    });
-    psd.ref_0.x = psd.corners[0].x - psd.ref_0.x;
-    psd.ref_0.y = psd.corners[0].y - psd.ref_0.y;
-
-    psd.corners = [
-        ref_0.clone(),
-        ref_0.clone(),
-        ref_0.clone(),
-        ref_0.clone(),
-    ];
-
-    let i = ix * psd.ref_0.x + iy * psd.ref_0.y;
-    psd.scores[0] = i;
-    psd.scores[2] = -i;
-    let i = ix * -psd.ref_0.y + iy * psd.ref_0.x;
-    psd.scores[1] = i;
-    psd.scores[3] = -i;
-    // Recolor to expected color right here
-    img.flood_fill(x, y, PixelColor::FindOneCorner, PixelColor::CapStone, &mut |row| {
-        find_other_corners(&mut psd, row.y, row.left, row.right);
-    });
-
-    let PolygonScoreData { corners, .. } = psd;
-    corners
+#[derive(Debug, Eq, PartialEq, Clone)]
+struct FirstCornerFinder {
+    initial: Point,
+    best: Point,
+    score: i32,
 }
 
-
-fn find_one_corner(
-    psd: &mut PolygonScoreData,
-    y: usize,
-    left: usize,
-    right: usize,
-) -> () {
-    let y = y as i32;
-    let xs = [left as i32, right as i32];
-    let dy = y - psd.ref_0.y;
-    for i in 0..2 {
-        let dx = xs[i] - psd.ref_0.x;
-        let d = dx * dx + dy * dy;
-        if d > psd.scores[0] {
-            psd.scores[0] = d;
-            psd.corners[0].x = xs[i];
-            psd.corners[0].y = y
+impl FirstCornerFinder {
+    pub fn new(initial: Point) -> Self {
+        FirstCornerFinder {
+            initial,
+            best: Default::default(),
+            score: -1,
         }
     }
-}
 
-fn find_other_corners(
-    psd: &mut PolygonScoreData,
-    y: usize,
-    left: usize,
-    right: usize,
-) -> () {
-    let y = y as i32;
-    let xs = [left as i32, right as i32];
-    for i in 0..2 {
-        let up = xs[i] * psd.ref_0.x + y * psd.ref_0.y;
-        let right_0 = xs[i] * -psd.ref_0.y + y * psd.ref_0.x;
-        let scores = [up, right_0, -up, -right_0];
-        for j in 0..4 {
-            if scores[j] > psd.scores[j] {
-                psd.scores[j] = scores[j];
-                psd.corners[j].x = xs[i];
-                psd.corners[j].y = y;
+    pub fn update(&mut self, row: Row) {
+        let dy = (row.y as i32) - self.initial.y;
+        let l_dx = (row.left as i32) - self.initial.x;
+        let r_dx = (row.right as i32) - self.initial.x;
+
+        let l_dist = l_dx * l_dx + dy * dy;
+        let r_dist = r_dx * r_dx + dy * dy;
+
+        if l_dist > self.score {
+            self.score = l_dist;
+            self.best = Point {
+                x: row.left as i32,
+                y: row.y as i32,
+            }
+        }
+
+        if r_dist > self.score {
+            self.score = r_dist;
+            self.best = Point {
+                x: row.right as i32,
+                y: row.y as i32,
             }
         }
     }
+
+    pub fn best(self) -> Point {
+        self.best
+    }
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+struct AllCornerFinder {
+    baseline: Point,
+    best: [Point; 4],
+    scores: [i32; 4],
+}
+
+impl AllCornerFinder {
+    pub fn new(initial: Point, corner: Point) -> Self {
+        let baseline = Point {
+            x: corner.x - initial.x,
+            y: corner.y - initial.y,
+        };
+
+        let parallel_score = initial.x * baseline.x + initial.y * baseline.y;
+        let orthogonal_score = -initial.x * baseline.y + initial.y * baseline.x;
+
+        AllCornerFinder {
+            baseline,
+            best: [baseline; 4],
+            scores: [parallel_score, orthogonal_score, -parallel_score, -orthogonal_score],
+        }
+    }
+
+    pub fn update(&mut self, row: Row) {
+        let l_par_score = (row.left as i32) * self.baseline.x + (row.y as i32) * self.baseline.y;
+        let l_ort_score = -(row.left as i32) * self.baseline.y + (row.y as i32) * self.baseline.x;
+        let l_scores = [l_par_score, l_ort_score, -l_par_score, -l_ort_score];
+
+        let r_par_score = (row.right as i32) * self.baseline.x + (row.y as i32) * self.baseline.y;
+        let r_ort_score = -(row.right as i32) * self.baseline.y + (row.y as i32) * self.baseline.x;
+        let r_scores = [r_par_score, r_ort_score, -r_par_score, -r_ort_score];
+
+        for j in 0..4 {
+            if l_scores[j] > self.scores[j] {
+                self.scores[j] = l_scores[j];
+                self.best[j] = Point {
+                    x: row.left as i32,
+                    y: row.y as i32,
+                }
+            }
+
+            if r_scores[j] > self.scores[j] {
+                self.scores[j] = r_scores[j];
+                self.best[j] = Point {
+                    x: row.right as i32,
+                    y: row.y as i32,
+                }
+            }
+        }
+    }
+
+    pub fn best(self) -> [Point; 4] {
+        self.best
+    }
+}

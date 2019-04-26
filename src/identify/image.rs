@@ -9,6 +9,15 @@ use gnuplot::Axes2D;
 use crate::identify::Point;
 
 
+#[derive(Clone)]
+pub struct Image {
+    w: usize,
+    h: usize,
+    pixels: Box<[u8]>,
+    unclaimed_regions: [Region; 250],
+    unclaimed_count: u8,
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct Row {
     pub left: usize,
@@ -18,38 +27,88 @@ pub struct Row {
 
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-#[repr(u8)]
 pub enum PixelColor {
-    Black,
     White,
+    Black,
     CapStone,
-    FindAlignment,
     Alignment,
-    CheckCapstone,
-    FindOneCorner,
-    TimingBlack,
-    TimingWhite,
+    Tmp1,
+    Tmp2,
+    Discarded(u8),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Image {
-    pub w: usize,
-    pub h: usize,
-    pub pixels: Box<[PixelColor]>,
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Region {
+    Unclaimed {
+        color: PixelColor,
+        src_x: usize,
+        src_y: usize,
+        pixel_count: usize,
+    },
+    CapStone,
+    Alignment,
+    Tmp1,
+    Tmp2,
+}
+
+impl From<u8> for PixelColor {
+    fn from(x: u8) -> Self {
+        match x {
+            0 => PixelColor::White,
+            1 => PixelColor::Black,
+            2 => PixelColor::CapStone,
+            3 => PixelColor::Alignment,
+            4 => PixelColor::Tmp1,
+            5 => PixelColor::Tmp2,
+            x => PixelColor::Discarded(x - 6),
+        }
+    }
+}
+
+impl From<PixelColor> for u8 {
+    fn from(c: PixelColor) -> Self {
+        match c {
+            PixelColor::White => 0,
+            PixelColor::Black => 1,
+            PixelColor::CapStone => 2,
+            PixelColor::Alignment => 3,
+            PixelColor::Tmp1 => 4,
+            PixelColor::Tmp2 => 5,
+            PixelColor::Discarded(x) => x + 6,
+        }
+    }
+}
+
+impl PartialEq<u8> for PixelColor {
+    fn eq(&self, other: &u8) -> bool {
+        let rep: u8 = (*self).into();
+        rep == *other
+    }
+}
+
+pub trait AreaFiller {
+    fn update(&mut self, row: Row);
+}
+
+impl<F> AreaFiller for F where F: FnMut(Row) -> () {
+    fn update(&mut self, row: Row) {
+        self(row)
+    }
+}
+
+struct AreaCounter(usize);
+
+impl AreaFiller for AreaCounter {
+    fn update(&mut self, row: Row) {
+        self.0 += row.right - row.left + 1;
+    }
 }
 
 impl Image {
     pub fn from_greyscale<F>(w: usize,
                              h: usize,
-                             fill: F, ) -> Self where F: FnMut(usize, usize) -> u8 {
-        Image::from_greyscale_debug(w, h, fill, |_, _, _| ())
-    }
-
-    pub fn from_greyscale_debug<F, D>(w: usize,
-                                      h: usize,
-                                      mut fill: F,
-                                      mut debug: D,
-    ) -> Self where F: FnMut(usize, usize) -> u8, D: FnMut(usize, usize, &[PixelColor]) -> () {
+                             mut fill: F,
+    ) -> Self where F: FnMut(usize, usize) -> u8 {
         let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
         let mut data = Vec::with_capacity(capacity);
 
@@ -78,13 +137,12 @@ impl Image {
 
             for x in 0..w {
                 let fill = if (fill(x, y) as usize) < row_average[x] * (100 - 5) / (200 * threshold_s) {
-                    PixelColor::Black
+                    1
                 } else {
-                    PixelColor::White
+                    0
                 };
                 data.push(fill);
             }
-            debug(w, y + 1, &data)
         }
 
         let pixels = data.into_boxed_slice();
@@ -92,35 +150,70 @@ impl Image {
             w,
             h,
             pixels,
+            unclaimed_regions: [Region::Unclaimed {
+                color: PixelColor::White,
+                pixel_count: 0,
+                src_x: 0,
+                src_y: 0,
+            }; 250],
+            unclaimed_count: 0,
         }
     }
 
-    pub(crate) fn repaint_and_count(&mut self, (x, y): (usize, usize), target_color: PixelColor) -> (PixelColor, usize) {
-        let src_color = self[(x, y)];
-
-        if src_color == target_color {
-            panic!("Tried to count already counted region!");
-        }
-
-        let mut count = 0;
-        {
-            let count_ref = &mut count;
-            self.flood_fill(x, y, src_color, target_color, &mut |row| {
-                *count_ref += row.right - row.left + 1;
-            });
-        }
-        (src_color, count)
+    pub fn width(&self) -> usize {
+        self.w
     }
 
+    pub fn height(&self) -> usize {
+        self.h
+    }
 
-    pub(crate) fn flood_fill(
+    pub fn get_region(&mut self, (x, y): (usize, usize)) -> Region {
+        let color: PixelColor = self[(x, y)].into();
+        match color {
+            PixelColor::Discarded(r) => self.unclaimed_regions[r as usize],
+            PixelColor::Black => {
+                let next_reg_col = PixelColor::Discarded(self.unclaimed_count);
+                let counter = self.repaint_and_apply((x, y), next_reg_col, AreaCounter(0));
+                let new_reg = Region::Unclaimed {
+                    color: next_reg_col,
+                    src_x: x,
+                    src_y: y,
+                    pixel_count: counter.0,
+                };
+                self.unclaimed_regions[self.unclaimed_count as usize] = new_reg;
+
+                self.unclaimed_count += 1;
+                if self.unclaimed_count == 250 {
+                    self.unclaimed_count = 0;
+                }
+                new_reg
+            }
+            PixelColor::Tmp1 => Region::Tmp1,
+            PixelColor::Tmp2 => Region::Tmp2,
+            PixelColor::Alignment => Region::Alignment,
+            PixelColor::CapStone => Region::CapStone,
+            PixelColor::White => panic!("Tried to color white patch"),
+        }
+    }
+
+    pub(crate) fn repaint_and_apply<F>(&mut self, (x, y): (usize, usize), target_color: PixelColor, fill: F) -> F where F: AreaFiller {
+        let src = self[(x, y)];
+        if PixelColor::White == src || target_color == src {
+            panic!("Cannot repaint with white or same color");
+        }
+
+        self.flood_fill(x, y, src, target_color.into(), fill)
+    }
+
+    fn flood_fill<F>(
         &mut self,
         x: usize,
         y: usize,
-        from: PixelColor,
-        to: PixelColor,
-        func: &mut FnMut(Row) -> (),
-    ) {
+        from: u8,
+        to: u8,
+        mut fill: F,
+    ) -> F where F: AreaFiller {
         assert_ne!(from, to);
 
         let w = self.w;
@@ -151,7 +244,7 @@ impl Image {
                 }
             }
 
-            func(Row {
+            fill.update(Row {
                 left,
                 right,
                 y,
@@ -187,28 +280,13 @@ impl Image {
                 }
             }
         }
-    }
-
-
-    #[cfg(feature = "debug-plot")]
-    pub fn plot<'a, 'b>(&'a self, axes: &'b mut Axes2D) -> &'b mut Axes2D {
-        axes.image(self.pixels.iter().map(|b| match *b {
-            PixelColor::White => 0,
-            PixelColor::Black => 1,
-            PixelColor::TimingWhite => 4,
-            PixelColor::TimingBlack => 5,
-            PixelColor::CapStone => 10,
-            PixelColor::Alignment => 11,
-            PixelColor::FindOneCorner => 20,
-            PixelColor::CheckCapstone => 21,
-            PixelColor::FindAlignment => 22,
-        }), self.h, self.w, Some((0.0, 0.0, self.w as f64, self.h as f64)), &[])
+        fill
     }
 }
 
 
 impl Index<(Range<usize>, usize)> for Image {
-    type Output = [PixelColor];
+    type Output = [u8];
 
     fn index(&self, (xs, y): (Range<usize>, usize)) -> &<Self as Index<(Range<usize>, usize)>>::Output {
         let start = y * self.w + xs.start;
@@ -226,7 +304,7 @@ impl IndexMut<(Range<usize>, usize)> for Image {
 }
 
 impl Index<Point> for Image {
-    type Output = PixelColor;
+    type Output = u8;
 
     fn index(&self, index: Point) -> &<Self as Index<Point>>::Output {
         assert!(index.x >= 0);
@@ -251,7 +329,7 @@ impl IndexMut<Point> for Image {
 
 
 impl Index<(usize, usize)> for Image {
-    type Output = PixelColor;
+    type Output = u8;
 
     fn index(&self, (x, y): (usize, usize)) -> &<Self as Index<(usize, usize)>>::Output {
         &self.pixels[y * self.w + x]
@@ -274,9 +352,9 @@ mod tests {
         for col in array.iter() {
             for item in col.iter() {
                 if *item == 0 {
-                    pixels.push(PixelColor::White)
+                    pixels.push(0)
                 } else {
-                    pixels.push(PixelColor::Black)
+                    pixels.push(1)
                 }
             }
         }
@@ -285,6 +363,13 @@ mod tests {
             w: 3,
             h: 3,
             pixels: pixels.into_boxed_slice(),
+            unclaimed_count: 0,
+            unclaimed_regions: [Region::Unclaimed {
+                src_y: 0,
+                src_x: 0,
+                color: PixelColor::White,
+                pixel_count: 0,
+            }; 250],
         }
     }
 
@@ -296,11 +381,11 @@ mod tests {
             [1, 1, 1],
         ]);
 
-        test_full.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
+        test_full.flood_fill(0, 0, 1, 2, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
-                assert_eq!(test_full[(x, y)], PixelColor::CapStone);
+                assert_eq!(test_full[(x, y)], 2);
             }
         }
     }
@@ -313,17 +398,17 @@ mod tests {
             [1, 0, 1],
         ]);
 
-        test_single.flood_fill(1, 1, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
+        test_single.flood_fill(1, 1, 1, 2, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && y == 1 {
-                    assert_eq!(test_single[(x, y)], PixelColor::CapStone);
+                    assert_eq!(test_single[(x, y)], 2);
                 } else {
                     let col = if (x + y) % 2 == 0 {
-                        PixelColor::Black
+                        1
                     } else {
-                        PixelColor::White
+                        0
                     };
                     assert_eq!(test_single[(x, y)], col);
                 }
@@ -339,14 +424,14 @@ mod tests {
             [1, 1, 1],
         ]);
 
-        test_ring.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
+        test_ring.flood_fill(0, 0, 1, 2, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && y == 1 {
-                    assert_eq!(test_ring[(x, y)], PixelColor::White);
+                    assert_eq!(test_ring[(x, y)], 0);
                 } else {
-                    assert_eq!(test_ring[(x, y)], PixelColor::CapStone);
+                    assert_eq!(test_ring[(x, y)], 2);
                 }
             }
         }
@@ -361,14 +446,14 @@ mod tests {
         ]);
 
 
-        test_u.flood_fill(0, 0, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
+        test_u.flood_fill(0, 0, 1, 2, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && (y == 0 || y == 1) {
-                    assert_eq!(test_u[(x, y)], PixelColor::White);
+                    assert_eq!(test_u[(x, y)], 0);
                 } else {
-                    assert_eq!(test_u[(x, y)], PixelColor::CapStone);
+                    assert_eq!(test_u[(x, y)], 2);
                 }
             }
         }
@@ -382,32 +467,42 @@ mod tests {
             [0, 0, 0],
         ]);
 
-        test_empty.flood_fill(1, 1, PixelColor::Black, PixelColor::CapStone, &mut |_| ());
+        test_empty.flood_fill(1, 1, 1, 2, &mut |_| ());
 
         for x in 0..3 {
             for y in 0..3 {
-                assert_eq!(test_empty[(x, y)], PixelColor::White)
+                assert_eq!(test_empty[(x, y)], 0)
             }
         }
     }
 
     #[test]
-    fn test_repaint_and_count() {
+    fn test_get_region() {
         let mut test_u = img_from_array([
             [1, 0, 1],
             [1, 0, 1],
             [1, 1, 1],
         ]);
 
-        let (old, c) = test_u.repaint_and_count((0, 0), PixelColor::CapStone);
-        assert_eq!(c, 7);
-        assert_eq!(old, PixelColor::Black);
+        let reg = test_u.get_region((0, 0));
+        let (color, src_x, src_y, pixel_count) = match reg {
+            Region::Unclaimed {
+                color,
+                src_x,
+                src_y,
+                pixel_count,
+            } => (color, src_x, src_y, pixel_count),
+            x @ _ => panic!("Expected Region::Unclaimed, got {:?}", x),
+        };
+        assert_eq!(0, src_x);
+        assert_eq!(0, src_y);
+        assert_eq!(7, pixel_count);
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && (y == 0 || y == 1) {
-                    assert_eq!(test_u[(x, y)], PixelColor::White);
+                    assert_eq!(PixelColor::White, test_u[(x, y)]);
                 } else {
-                    assert_eq!(test_u[(x, y)], PixelColor::CapStone);
+                    assert_eq!(color, test_u[(x, y)]);
                 }
             }
         }
