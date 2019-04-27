@@ -28,8 +28,7 @@ pub fn capstones_from_image(img: &mut Image) -> Vec<CapStone> {
     for y in 0..img.height() {
         let mut finder = CapStoneFinder::new(img[(0, y)].into());
         for x in 1..img.width() {
-            if finder.check_for_capstone(img[(x, y)].into()) {
-                let linepos = finder.get_positions(x);
+            if let Some(linepos) = finder.advance(img[(x, y)].into()) {
                 if is_capstone(img, &linepos, y) {
                     let cap = create_capstone(img, &linepos, y);
                     res.push(cap);
@@ -54,18 +53,7 @@ struct CapStoneFinder {
     last_color: PixelColor,
     run_length: usize,
     color_changes: usize,
-}
-
-fn looks_like_capstone(lookbehind_buf: &[usize; 5]) -> bool {
-    const CHECK: [usize; 5] = [1, 1, 3, 1, 1];
-    let avg = (lookbehind_buf[0] + lookbehind_buf[1] + lookbehind_buf[3] + lookbehind_buf[4]) / 4;
-    let err = avg * 3 / 4;
-    for i in 0..5 {
-        if lookbehind_buf[i] < CHECK[i] * avg - err || lookbehind_buf[i] > CHECK[i] * avg + err {
-            return false;
-        }
-    }
-    true
+    current_position: usize,
 }
 
 impl CapStoneFinder {
@@ -75,36 +63,58 @@ impl CapStoneFinder {
             last_color: initial_col,
             run_length: 1,
             color_changes: 0,
+            current_position: 0,
         }
     }
 
-    fn get_positions(&self, last_loc: usize) -> LinePosition {
-        LinePosition {
-            left: last_loc - self.lookbehind_buf.iter().sum::<usize>(),
-            stone: last_loc - self.lookbehind_buf[2..].iter().sum::<usize>(),
-            right: last_loc - self.lookbehind_buf[4],
-        }
-    }
+    fn advance(&mut self, color: PixelColor) -> Option<LinePosition> {
+        self.current_position += 1;
 
-    fn check_for_capstone(&mut self, color: PixelColor) -> bool {
-        let mut ret = false;
-
-        if self.last_color != color {
-            self.lookbehind_buf.rotate_left(1);
-            self.lookbehind_buf[4] = self.run_length;
-            self.run_length = 0;
-            self.color_changes += 1;
-
-
-            if color == PixelColor::White && self.color_changes >= 5 {
-                ret = looks_like_capstone(&self.lookbehind_buf);
-            }
+        // If we did not observe a color change, we have not reached the boundary of a capstone
+        if self.last_color == color {
+            self.run_length += 1;
+            return None;
         }
 
-        self.run_length += 1;
         self.last_color = color;
+        self.lookbehind_buf.rotate_left(1);
+        self.lookbehind_buf[4] = self.run_length;
+        self.run_length = 1;
+        self.color_changes += 1;
 
-        ret
+        if self.test_for_capstone() {
+            Some(LinePosition {
+                left: self.current_position - self.lookbehind_buf.iter().sum::<usize>(),
+                stone: self.current_position - self.lookbehind_buf[2..].iter().sum::<usize>(),
+                right: self.current_position - self.lookbehind_buf[4],
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Test if the observed pattern matches that of a capstone.
+    ///
+    /// Capstones have a distinct pattern of 1:1:3:1:1 of black->white->black->white->black
+    /// transitions.
+    fn test_for_capstone(&self) -> bool {
+        // A capstone should look like > x xxx x < so we have to check after 5 color changes
+        // and only if the newly observed color is white
+        if PixelColor::White == self.last_color && self.color_changes >= 5 {
+            const CHECK: [usize; 5] = [1, 1, 3, 1, 1];
+            let avg = (self.lookbehind_buf[0] + self.lookbehind_buf[1] + self.lookbehind_buf[3] + self.lookbehind_buf[4]) / 4;
+            let err = avg * 3 / 4;
+            for i in 0..5 {
+                if self.lookbehind_buf[i] < CHECK[i] * avg - err || self.lookbehind_buf[i] > CHECK[i] * avg + err {
+                    return false;
+                }
+            }
+
+            true
+        } else {
+            false
+        }
+
     }
 }
 
@@ -134,7 +144,8 @@ fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
             let ratio = stone_count * 100 / ring_count;
             // Verify that left is connected to right, and that stone is not connected
             // Also that the pixel counts roughly repsect the 37.5% ratio
-            ring_color != stone_color && 10 < ratio && ratio < 70
+            ring_color
+                != stone_color && 10 < ratio && ratio < 70
         }
         _ => false,
     }
@@ -269,5 +280,101 @@ impl AllCornerFinder {
 
     pub fn best(self) -> [Point; 4] {
         self.best
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_capstone_finder_small() {
+        let mut line = [1, 0, 1, 1, 1, 0, 1, 0].iter();
+
+        let mut finder = CapStoneFinder::new(PixelColor::White);
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(Some(LinePosition {
+            left: 1,
+            stone: 3,
+            right: 7,
+        }), finder.advance(PixelColor::from(*line.next().unwrap())));
+    }
+
+    #[test]
+    fn test_capstone_finder_start() {
+        let mut line = [0, 1, 1, 1, 0, 1, 0].iter();
+
+        let mut finder = CapStoneFinder::new(PixelColor::Black);
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(Some(LinePosition {
+            left: 0,
+            stone: 2,
+            right: 6,
+        }), finder.advance(PixelColor::from(*line.next().unwrap())));
+    }
+
+    #[test]
+    fn test_capstone_finder_multiple() {
+        let mut line = [0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0].iter();
+
+        let mut finder = CapStoneFinder::new(PixelColor::Black);
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(Some(LinePosition {
+            left: 0,
+            stone: 2,
+            right: 6,
+        }), finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(Some(LinePosition {
+            left: 6,
+            stone: 8,
+            right: 12,
+        }), finder.advance(PixelColor::from(*line.next().unwrap())));
+    }
+
+    #[test]
+    fn test_capstone_finder_variance() {
+        let mut line = [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0].iter();
+
+        let mut finder = CapStoneFinder::new(PixelColor::White);
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
+        assert_eq!(Some(LinePosition {
+            left: 1,
+            stone: 6,
+            right: 13,
+        }), finder.advance(PixelColor::from(*line.next().unwrap())));
     }
 }
