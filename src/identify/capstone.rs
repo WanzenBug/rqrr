@@ -5,6 +5,7 @@ use crate::{
         helper::Perspective,
     }
 };
+use crate::identify::image::AreaFiller;
 
 use super::PixelColor;
 
@@ -47,6 +48,23 @@ struct LinePosition {
     right: usize,
 }
 
+/// Find a possible capstone based on black/white transitions
+///
+/// ```bash
+///     #######
+///     #     #
+/// --> # ### # <--
+///     # ### #
+///     # ### #
+///     #     #
+///     #######
+/// ```
+/// A capstone has a distinctive pattern of 1:1:3:1:1 of black-white transitions.
+/// So a run of black is followed by a run of white of equal length, followed by black with 3 times
+/// the length and so on.
+///
+/// This struct is meant to operate on a single line, with the first value in the line given to
+/// `CapStoneFinder::new` and any following values given to `CapStoneFinder::advance`
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 struct CapStoneFinder {
     lookbehind_buf: [usize; 5],
@@ -57,6 +75,7 @@ struct CapStoneFinder {
 }
 
 impl CapStoneFinder {
+    /// Initialize a new CapStoneFinder with the value of the first pixel in a line
     fn new(initial_col: PixelColor) -> Self {
         CapStoneFinder {
             lookbehind_buf: [0; 5],
@@ -67,6 +86,11 @@ impl CapStoneFinder {
         }
     }
 
+    /// Advance the position of the finder with the given color.
+    ///
+    /// This will return `None` if no pattern matching a CapStone was recently observed. It will
+    /// return `Some(position)` if the last added pixel completes a 1:1:3:1:1 pattern of
+    /// black/white runs. This is a candidate for capstones.
     fn advance(&mut self, color: PixelColor) -> Option<LinePosition> {
         self.current_position += 1;
 
@@ -114,10 +138,18 @@ impl CapStoneFinder {
         } else {
             false
         }
-
     }
 }
 
+/// Determine if the given position is an unobserved capstone
+///
+/// This checks for a few things:
+/// * The `left` and `right` positions are connected
+/// * The `stone` position is **not** connected to the others
+/// * The positions are unclaimed, i.e. not used for other capstones etc.
+/// * The ratio between the size of `stone` position and the outer `ring` position is roughly 37.5%
+///
+/// Returns `true` if all of the above are true, `false` otherwise
 fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
     let ring_reg = img.get_region((linepos.right, y));
     let stone_reg = img.get_region((linepos.stone, y));
@@ -139,8 +171,6 @@ fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
                 ..
             }
         ) => {
-
-
             let ratio = stone_count * 100 / ring_count;
             // Verify that left is connected to right, and that stone is not connected
             // Also that the pixel counts roughly repsect the 37.5% ratio
@@ -151,6 +181,13 @@ fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
     }
 }
 
+/// Create a capstone at the given position
+///
+/// * This determines the extend and perspective of the capstone at the given position
+/// * It marks the `ring` and `stone` of the capstone as reserved so that it may not be detected
+///   again
+///
+/// Returns the `CapStone` at the given position
 fn create_capstone(
     img: &mut Image,
     linepos: &LinePosition,
@@ -158,11 +195,10 @@ fn create_capstone(
 ) -> CapStone {
     /* Find the corners of the ring */
     let start_point = Point { x: linepos.right as i32, y: y as i32 };
-    let mut first_corner_finder = FirstCornerFinder::new(start_point);
-    img.repaint_and_apply((linepos.right, y), PixelColor::Tmp1, |row| first_corner_finder.update(row));
-    let mut all_corner_finder = AllCornerFinder::new(start_point, first_corner_finder.best());
-    // Recolor to expected color right here
-    img.repaint_and_apply((linepos.right, y), PixelColor::CapStone, |row| all_corner_finder.update(row));
+    let first_corner_finder = FirstCornerFinder::new(start_point);
+    let first_corner_finder = img.repaint_and_apply((linepos.right, y), PixelColor::Tmp1, first_corner_finder);
+    let all_corner_finder = AllCornerFinder::new(start_point, first_corner_finder.best());
+    let all_corner_finder = img.repaint_and_apply((linepos.right, y), PixelColor::CapStone, all_corner_finder);
     let corners = all_corner_finder.best();
 
     /* Set up the perspective transform and find the center */
@@ -180,6 +216,10 @@ fn create_capstone(
     }
 }
 
+/// Find the a corner of a sheared rectangle.
+///
+/// This finds the point that is the farthest from a given reference point on the rectangle.
+/// This point must be one corner
 #[derive(Debug, Eq, PartialEq, Clone)]
 struct FirstCornerFinder {
     initial: Point,
@@ -196,7 +236,13 @@ impl FirstCornerFinder {
         }
     }
 
-    pub fn update(&mut self, row: Row) {
+    pub fn best(self) -> Point {
+        self.best
+    }
+}
+
+impl AreaFiller for FirstCornerFinder {
+    fn update(&mut self, row: Row) {
         let dy = (row.y as i32) - self.initial.y;
         let l_dx = (row.left as i32) - self.initial.x;
         let r_dx = (row.right as i32) - self.initial.x;
@@ -220,12 +266,16 @@ impl FirstCornerFinder {
             }
         }
     }
-
-    pub fn best(self) -> Point {
-        self.best
-    }
 }
 
+/// Find the 4 corners of a rectangle
+///
+/// Expects an initial point in the rectangle as well as a known corner
+///
+/// The other corners are found by searching extreme points based on the line between initial
+/// and corner point. The opposite corner must one of the points that lie the farthest in the
+/// opposite direction. The 2 other corners are those that are the farthest left and right from
+/// the reference line.
 #[derive(Debug, Eq, PartialEq, Clone)]
 struct AllCornerFinder {
     baseline: Point,
@@ -250,7 +300,13 @@ impl AllCornerFinder {
         }
     }
 
-    pub fn update(&mut self, row: Row) {
+    pub fn best(self) -> [Point; 4] {
+        self.best
+    }
+}
+
+impl AreaFiller for AllCornerFinder {
+    fn update(&mut self, row: Row) {
         let l_par_score = (row.left as i32) * self.baseline.x + (row.y as i32) * self.baseline.y;
         let l_ort_score = -(row.left as i32) * self.baseline.y + (row.y as i32) * self.baseline.x;
         let l_scores = [l_par_score, l_ort_score, -l_par_score, -l_ort_score];
@@ -276,10 +332,6 @@ impl AllCornerFinder {
                 }
             }
         }
-    }
-
-    pub fn best(self) -> [Point; 4] {
-        self.best
     }
 }
 
@@ -376,5 +428,67 @@ mod tests {
             stone: 6,
             right: 13,
         }), finder.advance(PixelColor::from(*line.next().unwrap())));
+    }
+
+    fn img_from_array(array: [[u8; 3]; 3]) -> Image {
+        Image::from_bitmap(3, 3, |x, y| {
+            array[y][x] == 1
+        })
+    }
+
+    #[test]
+    fn test_one_corner_finder() {
+        let mut test_u = img_from_array([
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ]);
+        let finder = FirstCornerFinder::new(Point {
+            x: 0,
+            y: 0,
+        });
+
+        let res = test_u.repaint_and_apply((0, 0), PixelColor::Tmp1, finder);
+        assert_eq!(Point {
+            x: 2,
+            y: 2,
+        }, res.best());
+    }
+
+    #[test]
+    fn test_all_corner_finder() {
+        let mut test_u = img_from_array([
+            [1, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+        ]);
+        let initial = Point {
+            x: 0,
+            y: 0,
+        };
+        let one_corner = Point {
+            x: 2,
+            y: 2,
+        };
+        let finder = AllCornerFinder::new(initial, one_corner);
+
+        let res = test_u.repaint_and_apply((0, 0), PixelColor::Tmp1, finder);
+        let corners = res.best();
+        assert_eq!(Point {
+            x: 2,
+            y: 2,
+        }, corners[0]);
+        assert_eq!(Point {
+            x: 0,
+            y: 0,
+        }, corners[0]);
+        assert_eq!(Point {
+            x: 2,
+            y: 0,
+        }, corners[0]);
+        assert_eq!(Point {
+            x: 0,
+            y: 2,
+        }, corners[0]);
     }
 }

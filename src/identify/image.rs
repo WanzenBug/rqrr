@@ -101,6 +101,36 @@ impl AreaFiller for AreaCounter {
 }
 
 impl Image {
+    pub fn from_bitmap<F>(w: usize, h: usize, mut fill: F) -> Self where F: FnMut(usize, usize) -> bool {
+        let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
+        let mut pixels = Vec::with_capacity(capacity);
+
+        for y in 0..h {
+            for x in 0..w {
+                let col = if fill(x, y) {
+                    PixelColor::Black
+                } else {
+                    PixelColor::White
+                };
+                pixels.push(col.into())
+            }
+        }
+        let pixels = pixels.into_boxed_slice();
+
+        Image {
+            w,
+            h,
+            pixels,
+            unclaimed_regions: [Region::Unclaimed {
+                color: PixelColor::White,
+                pixel_count: 0,
+                src_x: 0,
+                src_y: 0,
+            }; 250],
+            unclaimed_count: 0,
+        }
+    }
+
     pub fn from_greyscale<F>(w: usize,
                              h: usize,
                              mut fill: F,
