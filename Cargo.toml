@@ -2,7 +2,19 @@
 name = "rqrr"
 edition = "2018"
 version = "0.1.0"
-authors = ["WanzenBug <moritz9422@gmail.com>"]
+authors = ["WanzenBug <moritz@wanzenbug.xyz>"]
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.rs/rqrr"
+repository = "https://github.com/WanzenBug/rqrr"
+readme = "./README.md"
+keywords = ["qrcode", "detection"]
+description = """
+Detect and read QR codes from any image source
+"""
+categories = [
+    "graphics",
+    "encoding",
+]
 
 
 [features]
