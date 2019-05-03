@@ -14,7 +14,7 @@
 //! let img = image::open("tests/data/github.gif").unwrap();
 //! let codes = rqrr::find_and_decode_from_image(&img);
 //! assert_eq!(codes.len(), 1);
-//! assert_eq!(codes[0].val, "https://github.com/WanzenBug/de-qr");
+//! assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
 //! ```
 //!
 //! If you have some other form of picture storage, you can use [`find_and_decode_from_func`]().
@@ -59,25 +59,25 @@ pub trait Grid {
 /// use rqrr;
 ///
 /// let grid = [
-///     [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
-///     [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
-///     [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
-///     [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
-///     [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
-///     [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
+///     [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
+///     [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
+///     [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
+///     [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
+///     [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
+///     [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
 ///     [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, ],
-///     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
-///     [1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, ],
-///     [1, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 1, ],
-///     [1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, ],
-///     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, ],
-///     [1, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, ],
-///     [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, ],
-///     [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, ],
-///     [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ],
+///     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+///     [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, ],
+///     [1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, ],
+///     [0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, ],
+///     [1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, ],
+///     [0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, ],
+///     [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, ],
+///     [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, ],
+///     [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ],
 ///     [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, ],
 ///     [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, ],
-///     [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, ],
+///     [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, ],
 ///     [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, ],
 ///     [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, ],
 /// ];
@@ -87,7 +87,7 @@ pub trait Grid {
 /// });
 /// let mut result = Vec::new();
 /// rqrr::decode(&img, &mut result).unwrap();
-/// assert_eq!(b"deqr".as_ref(), &result[..])
+/// assert_eq!(b"rqrr".as_ref(), &result[..])
 /// ```
 #[derive(Debug, Clone)]
 pub struct SimpleGrid {
@@ -154,7 +154,7 @@ pub struct Code {
 /// let img = image::open("tests/data/github.gif").unwrap();
 /// let codes = rqrr::find_and_decode_from_image(&img);
 /// assert_eq!(codes.len(), 1);
-/// assert_eq!(codes[0].val, "https://github.com/WanzenBug/de-qr");
+/// assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
 /// ```
 #[cfg(feature = "img")]
 pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
@@ -195,7 +195,7 @@ pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
 /// let h = img.height() as usize;
 /// let codes = rqrr::find_and_decode_from_func(w, h, |x, y|  img.get_pixel(x as u32, y as u32).data[0]);
 /// assert_eq!(codes.len(), 1);
-/// assert_eq!(codes[0].val, "https://github.com/WanzenBug/de-qr");
+/// assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
 /// ```
 pub fn find_and_decode_from_func<F>(width: usize, height: usize, fill: F) -> Vec<Code> where F: FnMut(usize, usize) -> u8 {
     let mut img = SearchableImage::from_greyscale(width, height, fill);

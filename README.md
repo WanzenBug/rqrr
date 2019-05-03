@@ -14,7 +14,7 @@ use rqrr;
 let img = image::open("tests/data/github.gif").unwrap();
 let codes = rqrr::find_and_decode_from_image(&img);
 assert_eq!(codes.len(), 1);
-assert_eq!(codes[0].val, "https://github.com/WanzenBug/de-qr");
+assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
 ```
 For more information visit [docs.rs](https://docs.rs/rqrr)
 
