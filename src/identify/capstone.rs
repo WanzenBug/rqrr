@@ -295,7 +295,7 @@ impl AllCornerFinder {
 
         AllCornerFinder {
             baseline,
-            best: [baseline; 4],
+            best: [initial; 4],
             scores: [parallel_score, orthogonal_score, -parallel_score, -orthogonal_score],
         }
     }
@@ -480,15 +480,15 @@ mod tests {
         }, corners[0]);
         assert_eq!(Point {
             x: 0,
+            y: 2,
+        }, corners[1]);
+        assert_eq!(Point {
+            x: 0,
             y: 0,
-        }, corners[0]);
+        }, corners[2]);
         assert_eq!(Point {
             x: 2,
             y: 0,
-        }, corners[0]);
-        assert_eq!(Point {
-            x: 0,
-            y: 2,
-        }, corners[0]);
+        }, corners[3]);
     }
 }
