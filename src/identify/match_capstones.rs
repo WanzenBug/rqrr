@@ -1,5 +1,3 @@
-
-
 use super::CapStone;
 
 #[derive(Debug, Clone)]
@@ -16,6 +14,10 @@ struct Neighbor {
     distance: f64,
 }
 
+/// Find CapStones that form a grid
+///
+/// By trying to match up the relative perspective of 3 [CapStones](struct.CapStone.html) we can
+/// find those that corner the same QR code.
 pub fn find_groupings(mut capstones: Vec<CapStone>) -> Vec<CapStoneGroup> {
     let mut idx = 0;
     let mut groups = Vec::new();

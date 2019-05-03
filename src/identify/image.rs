@@ -5,8 +5,12 @@ use std::ops::Range;
 
 use crate::identify::Point;
 
+/// An black-and-white image that can be mutated on search for QR codes
+///
+/// During search for QR codes, some black zones will be recolored in 'different' shades of black.
+/// This is done to speed up the search and mitigate the impact of a huge zones.
 #[derive(Clone)]
-pub struct Image {
+pub struct SearchableImage {
     w: usize,
     h: usize,
     pixels: Box<[u8]>,
@@ -100,7 +104,24 @@ impl AreaFiller for AreaCounter {
     }
 }
 
-impl Image {
+impl SearchableImage {
+    /// Given an image, create a searchable copy of it
+    ///
+    /// This first converts the image to greyscale before filling its own buffer
+    #[cfg(feature = "img")]
+    pub fn from_dynamic(img: &image::DynamicImage) -> Self {
+        use image::GenericImageView;
+        let gray = img.to_luma();
+        let w = gray.width() as usize;
+        let h = gray.height() as usize;
+        SearchableImage::from_greyscale(w, h, |x, y| {
+            img.get_pixel(x as u32, y as u32).data[0]
+        })
+    }
+
+    /// Given a function with binary output, generate a searchable image
+    ///
+    /// If the given function returns `true` the matching pixel will be 'black'.
     pub fn from_bitmap<F>(w: usize, h: usize, mut fill: F) -> Self where F: FnMut(usize, usize) -> bool {
         let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
         let mut pixels = Vec::with_capacity(capacity);
@@ -117,7 +138,7 @@ impl Image {
         }
         let pixels = pixels.into_boxed_slice();
 
-        Image {
+        SearchableImage {
             w,
             h,
             pixels,
@@ -131,6 +152,10 @@ impl Image {
         }
     }
 
+    /// Given a byte valued function, generate a searchable image
+    ///
+    /// The values returned by the function are interpreted as luminance. i.e. a value of
+    /// 0 is black, 255 is white.
     pub fn from_greyscale<F>(w: usize,
                              h: usize,
                              mut fill: F,
@@ -172,7 +197,7 @@ impl Image {
         }
 
         let pixels = data.into_boxed_slice();
-        Image {
+        SearchableImage {
             w,
             h,
             pixels,
@@ -186,15 +211,17 @@ impl Image {
         }
     }
 
+    /// Return the width of the image
     pub fn width(&self) -> usize {
         self.w
     }
 
+    /// Return the height of the image
     pub fn height(&self) -> usize {
         self.h
     }
 
-    pub fn get_region(&mut self, (x, y): (usize, usize)) -> Region {
+    pub(crate) fn get_region(&mut self, (x, y): (usize, usize)) -> Region {
         let color: PixelColor = self[(x, y)].into();
         match color {
             PixelColor::Discarded(r) => self.unclaimed_regions[r as usize],
@@ -311,7 +338,7 @@ impl Image {
 }
 
 
-impl Index<(Range<usize>, usize)> for Image {
+impl Index<(Range<usize>, usize)> for SearchableImage {
     type Output = [u8];
 
     fn index(&self, (xs, y): (Range<usize>, usize)) -> &<Self as Index<(Range<usize>, usize)>>::Output {
@@ -321,7 +348,7 @@ impl Index<(Range<usize>, usize)> for Image {
     }
 }
 
-impl IndexMut<(Range<usize>, usize)> for Image {
+impl IndexMut<(Range<usize>, usize)> for SearchableImage {
     fn index_mut(&mut self, (xs, y): (Range<usize>, usize)) -> &mut <Self as Index<(Range<usize>, usize)>>::Output {
         let start = y * self.w + xs.start;
         let end = y * self.w + xs.end;
@@ -329,7 +356,7 @@ impl IndexMut<(Range<usize>, usize)> for Image {
     }
 }
 
-impl Index<Point> for Image {
+impl Index<Point> for SearchableImage {
     type Output = u8;
 
     fn index(&self, index: Point) -> &<Self as Index<Point>>::Output {
@@ -342,7 +369,7 @@ impl Index<Point> for Image {
     }
 }
 
-impl IndexMut<Point> for Image {
+impl IndexMut<Point> for SearchableImage {
     fn index_mut(&mut self, index: Point) -> &mut <Self as Index<Point>>::Output {
         assert!(index.x >= 0);
         assert!((index.x as usize) < self.w);
@@ -354,7 +381,7 @@ impl IndexMut<Point> for Image {
 }
 
 
-impl Index<(usize, usize)> for Image {
+impl Index<(usize, usize)> for SearchableImage {
     type Output = u8;
 
     fn index(&self, (x, y): (usize, usize)) -> &<Self as Index<(usize, usize)>>::Output {
@@ -362,7 +389,7 @@ impl Index<(usize, usize)> for Image {
     }
 }
 
-impl IndexMut<(usize, usize)> for Image {
+impl IndexMut<(usize, usize)> for SearchableImage {
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut <Self as Index<(usize, usize)>>::Output {
         &mut self.pixels[y * self.w + x]
     }
@@ -372,7 +399,7 @@ impl IndexMut<(usize, usize)> for Image {
 mod tests {
     use super::*;
 
-    fn img_from_array(array: [[u8; 3]; 3]) -> Image {
+    fn img_from_array(array: [[u8; 3]; 3]) -> SearchableImage {
         let mut pixels = Vec::new();
         for col in array.iter() {
             for item in col.iter() {
@@ -384,7 +411,7 @@ mod tests {
             }
         }
 
-        Image {
+        SearchableImage {
             w: 3,
             h: 3,
             pixels: pixels.into_boxed_slice(),

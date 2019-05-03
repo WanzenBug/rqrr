@@ -5,12 +5,12 @@ use std::{
 
 use crate::{
     CapStone,
-    GridImage,
+    Grid,
     identify::{
         image::Region,
         match_capstones::CapStoneGroup,
     },
-    Image,
+    SearchableImage,
     version_db::VERSION_DATA_BASE,
 };
 use crate::identify::image::{AreaFiller, Row};
@@ -21,16 +21,32 @@ use super::{
     Point,
 };
 
+/// Location of a skewed square in an image
+///
+/// A skewed square formed by 3 [CapStones](struct.CapStone.html) and possibly an alignment
+/// pattern located in the 4th corner. This can be converted into a normal [Grid](trait.Grid.html)
+/// that can be decoded.
 #[derive(Debug, Clone)]
-pub struct Grid {
+pub struct SkewedGridLocation {
     pub caps: [CapStone; 3],
     pub align: Point,
     pub grid_size: usize,
     pub c: helper::Perspective,
 }
 
-impl Grid {
-    pub fn from_group(img: &mut Image, mut group: CapStoneGroup) -> Option<Self> {
+impl SkewedGridLocation {
+    /// Create a SkewedGridLocation from corners
+    ///
+    /// Given 3 corners of a grid, this tries to match the expected features of a QR code
+    /// such that the SkewedGridLocation maps onto those features.
+    ///
+    /// For all grids this includes searching for timing patterns between capstones to determine
+    /// the grid size.
+    ///
+    /// For bigger grids this includes searching for an alignment pattern in the 4 corner.
+    ///
+    /// If no sufficient match could be produces, return `None` instead.
+    pub fn from_group(img: &mut SearchableImage, mut group: CapStoneGroup) -> Option<Self> {
         /* Construct the hypotenuse line from A to C. B should be to
          * the left of this line.
          */
@@ -87,7 +103,7 @@ impl Grid {
         let c = setup_perspective(img, &group, align, grid_size);
         let caps = [group.0, group.1, group.2];
 
-        Some(Grid {
+        Some(SkewedGridLocation {
             align,
             caps,
             grid_size,
@@ -95,7 +111,8 @@ impl Grid {
         })
     }
 
-    pub fn into_grid_image(self, img: &Image) -> RefGridImage {
+    /// Convert into a grid referencing the underlying image as source
+    pub fn into_grid_image(self, img: &SearchableImage) -> RefGridImage {
         RefGridImage {
             grid: self,
             img,
@@ -103,12 +120,16 @@ impl Grid {
     }
 }
 
+/// A Grid that references a bigger image
+///
+/// Given a grid location and an image, imlement the [Grid trait](trait.Grid.html) so that it may
+/// be decoded by [decode](fn.decode.html)
 pub struct RefGridImage<'a> {
-    grid: Grid,
-    img: &'a Image,
+    grid: SkewedGridLocation,
+    img: &'a SearchableImage,
 }
 
-impl<'a> GridImage for RefGridImage<'a> {
+impl<'a> Grid for RefGridImage<'a> {
     fn size(&self) -> usize {
         self.grid.grid_size
     }
@@ -119,7 +140,7 @@ impl<'a> GridImage for RefGridImage<'a> {
     }
 }
 
-fn setup_perspective(img: &Image, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective {
+fn setup_perspective(img: &SearchableImage, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective {
     let inital = helper::Perspective::create(&[
         caps.1.corners[0],
         caps.2.corners[0],
@@ -156,7 +177,7 @@ fn rotate_capstone(
 // * a horizontal and a vertical timing scan.
 // */
 fn measure_timing_pattern(
-    img: &Image,
+    img: &SearchableImage,
     caps: &CapStoneGroup,
 ) -> usize {
     const US: [f64; 3] = [6.5f64, 6.5f64, 0.5f64];
@@ -178,7 +199,7 @@ fn measure_timing_pattern(
 }
 
 fn timing_scan(
-    img: &Image,
+    img: &SearchableImage,
     p0: &Point,
     p1: &Point,
 ) -> usize {
@@ -200,7 +221,7 @@ fn timing_scan(
 }
 
 
-fn find_alignment_pattern(img: &mut Image, mut align_seed: Point, c0: &CapStone, c2: &CapStone) -> Option<Point> {
+fn find_alignment_pattern(img: &mut SearchableImage, mut align_seed: Point, c0: &CapStone, c2: &CapStone) -> Option<Point> {
     /* Guess another two corners of the alignment pattern so that we
      * can estimate its size.
      */
@@ -278,7 +299,7 @@ impl AreaFiller for LeftMostFinder {
 }
 
 
-fn jiggle_perspective(img: &Image, mut perspective: helper::Perspective, grid_size: usize) -> helper::Perspective {
+fn jiggle_perspective(img: &SearchableImage, mut perspective: helper::Perspective, grid_size: usize) -> helper::Perspective {
     let mut best = fitness_all(img, &perspective, grid_size);
     let mut adjustments: [f64; 8] = [
         perspective.0[0] * 0.02f64,
@@ -322,7 +343,7 @@ fn jiggle_perspective(img: &Image, mut perspective: helper::Perspective, grid_si
  * transform, using the features we expect to find by scanning the
  * grid.
  */
-fn fitness_all(img: &Image, perspective: &helper::Perspective, grid_size: usize) -> i32 {
+fn fitness_all(img: &SearchableImage, perspective: &helper::Perspective, grid_size: usize) -> i32 {
     let version = (grid_size - 17) / 4;
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
@@ -357,7 +378,7 @@ fn fitness_all(img: &Image, perspective: &helper::Perspective, grid_size: usize)
 }
 
 fn fitness_apat(
-    img: &Image,
+    img: &SearchableImage,
     perspective: &helper::Perspective,
     cx: i32,
     cy: i32,
@@ -368,7 +389,7 @@ fn fitness_apat(
 }
 
 fn fitness_ring(
-    img: &Image,
+    img: &SearchableImage,
     perspective: &helper::Perspective,
     cx: i32,
     cy: i32,
@@ -385,7 +406,7 @@ fn fitness_ring(
 }
 
 fn fitness_cell(
-    img: &Image,
+    img: &SearchableImage,
     perspective: &helper::Perspective,
     x: i32,
     y: i32,
@@ -409,7 +430,7 @@ fn fitness_cell(
 
 
 fn fitness_capstone(
-    img: &Image,
+    img: &SearchableImage,
     perspective: &helper::Perspective,
     x: i32,
     y: i32,

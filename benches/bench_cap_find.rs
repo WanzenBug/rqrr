@@ -1,9 +1,10 @@
 use criterion;
-use rqrr;
-use image;
 use criterion::{criterion_group, criterion_main};
+use image;
 
-fn find_caps(mut img: rqrr::identify::Image) -> Vec<rqrr::CapStone> {
+use rqrr;
+
+fn find_caps(mut img: rqrr::identify::SearchableImage) -> Vec<rqrr::CapStone> {
     rqrr::identify::capstones_from_image(&mut img)
 }
 
@@ -13,7 +14,7 @@ fn bench_find_caps(c: &mut criterion::Criterion) {
     let w = img.width() as usize;
     let h = img.height() as usize;
 
-    let img = rqrr::identify::Image::from_greyscale(w, h, |x, y| {
+    let img = rqrr::identify::SearchableImage::from_greyscale(w, h, |x, y| {
         img.get_pixel(x as u32, y as u32).data[0]
     });
 

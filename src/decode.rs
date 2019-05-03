@@ -1,19 +1,22 @@
-use crate::{DeQRError, DeQRResult, GridImage};
-use crate::version_db::{RSParameters, VERSION_DATA_BASE};
 use std::io::Write;
 use std::mem;
 
 use g2p::{g2p, GaloisField};
+
+use crate::{DeQRError, DeQRResult, Grid};
+use crate::version_db::{RSParameters, VERSION_DATA_BASE};
 
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
 const MAX_PAYLOAD_SIZE: usize = 8896;
 
+/// Version of a QR Code which determines its size
 #[derive(Debug, Clone, Copy)]
 pub struct Version(usize);
 
 impl Version {
+    /// Given the grid size, determine the likely grid size
     pub fn from_size(b: usize) -> DeQRResult<Self> {
         if b > 0 && b <= 40 {
             Ok(Version((b - 17) / 4))
@@ -22,16 +25,23 @@ impl Version {
         }
     }
 
+    /// Return the size of a grid of the given version
     pub fn to_size(&self) -> usize {
         self.0 as usize * 4 + 17
     }
 }
 
-/* This structure holds the decoded QR-code data */
+/// MetaData for a QR grid
+///
+/// Stores information about the size/version of given grid. Also contains information about the
+/// error correction level and bit mask used.
 #[derive(Debug, Clone, Copy)]
 pub struct MetaData {
+    /// The version/size of the grid
     pub version: Version,
+    /// the error correction leven, between 0 and 3
     pub ecc_level: u16,
+    /// The mask that was used, value between 0 and 7
     pub mask: u16,
 }
 
@@ -102,7 +112,12 @@ pub struct DataStream {
     pub data: [u8; MAX_PAYLOAD_SIZE],
 }
 
-pub fn decode<W>(code: &GridImage, writer: W) -> DeQRResult<MetaData> where W: Write {
+/// Given a grid try to decode and write it to the output writer
+///
+/// This tries to read the bit patterns from a [Grid](trait.Grid.html), correct errors
+/// and/or missing bits and write the result to the output. If successful also returns
+/// [MetaData](struct.MetaData.html) of the read grid.
+pub fn decode<W>(code: &Grid, writer: W) -> DeQRResult<MetaData> where W: Write {
     let meta = read_format(code)?;
     let raw = read_data(code, &meta);
     let stream = codestream_ecc(&meta, raw)?;
@@ -530,7 +545,7 @@ fn poly_add<G>(
 }
 
 fn read_data(
-    code: &GridImage,
+    code: &Grid,
     meta: &MetaData,
 ) -> RawData {
     let mut ds = RawData::new();
@@ -571,7 +586,7 @@ fn read_data(
 }
 
 fn read_bit(
-    code: &GridImage,
+    code: &Grid,
     meta: &MetaData,
     y: usize,
     x: usize,
@@ -693,7 +708,7 @@ fn correct_format(mut word: u16) -> DeQRResult<u16> {
     Ok(word)
 }
 
-fn read_format(code: &GridImage) -> DeQRResult<MetaData> {
+fn read_format(code: &Grid) -> DeQRResult<MetaData> {
     let mut format = 0;
 
     // Try first location

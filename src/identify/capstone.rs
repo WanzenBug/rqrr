@@ -1,7 +1,7 @@
 use crate::{
     identify::{
         Point,
-        image::{Region, Image, Row},
+        image::{Region, SearchableImage, Row},
         helper::Perspective,
     }
 };
@@ -9,10 +9,20 @@ use crate::identify::image::AreaFiller;
 
 use super::PixelColor;
 
+/// A locator pattern of a QR grid
+///
+/// One of 3 corner patterns of a QR code. Can be found using a distinctive 1:1:3:1:1 pattern
+/// of black-white zones.
+///
+/// Stores information about the corners of the capstone (NOT the grid), the center point and
+/// the local `perspective` i.e. in which direction the grid is likely skewed.
 #[derive(Debug, Clone)]
 pub struct CapStone {
+    /// The 4 corners of the capstone
     pub corners: [Point; 4],
+    /// The center point of the capstone
     pub center: Point,
+    /// The local perspective of the capstone, i.e. in which direction(s) the capstone is skewed.
     pub c: Perspective,
 }
 
@@ -23,7 +33,14 @@ pub struct PolygonScoreData {
     pub corners: [Point; 4],
 }
 
-pub fn capstones_from_image(img: &mut Image) -> Vec<CapStone> {
+/// Find all 'capstones' in a given image.
+///
+/// A Capstones is the locator pattern of a QR code. Every QR code has 3 of these in 3 corners.
+/// This function finds these patterns by scanning the image line by line for a distinctive
+/// 1:1:3:1:1 pattern of black-white-black-white-black zones.
+///
+/// Returns a vector of [CapStones](struct.CapStone.html)
+pub fn capstones_from_image(img: &mut SearchableImage) -> Vec<CapStone> {
     let mut res = Vec::new();
 
     for y in 0..img.height() {
@@ -150,7 +167,7 @@ impl CapStoneFinder {
 /// * The ratio between the size of `stone` position and the outer `ring` position is roughly 37.5%
 ///
 /// Returns `true` if all of the above are true, `false` otherwise
-fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
+fn is_capstone(img: &mut SearchableImage, linepos: &LinePosition, y: usize) -> bool {
     let ring_reg = img.get_region((linepos.right, y));
     let stone_reg = img.get_region((linepos.stone, y));
 
@@ -189,7 +206,7 @@ fn is_capstone(img: &mut Image, linepos: &LinePosition, y: usize) -> bool {
 ///
 /// Returns the `CapStone` at the given position
 fn create_capstone(
-    img: &mut Image,
+    img: &mut SearchableImage,
     linepos: &LinePosition,
     y: usize,
 ) -> CapStone {
@@ -430,8 +447,8 @@ mod tests {
         }), finder.advance(PixelColor::from(*line.next().unwrap())));
     }
 
-    fn img_from_array(array: [[u8; 3]; 3]) -> Image {
-        Image::from_bitmap(3, 3, |x, y| {
+    fn img_from_array(array: [[u8; 3]; 3]) -> SearchableImage {
+        SearchableImage::from_bitmap(3, 3, |x, y| {
             array[y][x] == 1
         })
     }

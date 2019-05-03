@@ -1,6 +1,6 @@
 extern crate rqrr;
 
-use rqrr::GridImage;
+use rqrr::Grid;
 
 #[test]
 fn test_deqr() {
@@ -28,7 +28,7 @@ fn test_deqr() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, ],
     ];
 
-    let img = rqrr::SimpleGridImage::from_func(21, |x, y| {
+    let img = rqrr::SimpleGrid::from_func(21, |x, y| {
         grid[y][x] == 1
     });
 
@@ -84,7 +84,7 @@ fn test_github() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, ]
     ];
 
-    let img = rqrr::SimpleGridImage::from_func(29, |x, y| {
+    let img = rqrr::SimpleGrid::from_func(29, |x, y| {
         grid[y][x] == 1
     });
 
@@ -140,7 +140,7 @@ fn test_number() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]
     ];
 
-    let img = rqrr::SimpleGridImage::from_func(29, |x, y| {
+    let img = rqrr::SimpleGrid::from_func(29, |x, y| {
         grid[y][x] == 1
     });
 
