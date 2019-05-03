@@ -6,19 +6,7 @@ authors = ["WanzenBug <moritz9422@gmail.com>"]
 
 
 [features]
-examples = ["piston", "piston2d-graphics", "pistoncore-glutin_window", "piston2d-opengl_graphics", "img"]
 img = ["image"]
-all = ["examples", "img"]
-
-[[example]]
-name = "debug_full"
-path = "examples/debug_full.rs"
-required-features = ["examples"]
-
-[[example]]
-name = "debug_caps"
-path = "examples/debug_caps.rs"
-required-features = ["examples"]
 
 [[test]]
 name = "test_load"
@@ -42,9 +30,4 @@ criterion = "0.2"
 [dependencies]
 g2p = "0.3.1"
 
-
-piston = { version = "*", optional = true }
-piston2d-graphics = { version = "*", optional = true }
-pistoncore-glutin_window = { version = "*", optional = true }
-piston2d-opengl_graphics = { version = "*", optional = true }
 image = { version = "*", optional = true }
