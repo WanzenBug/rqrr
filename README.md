@@ -1,5 +1,6 @@
 # rust-qr-reader - Find and read QR-Codes
 [![documentation](https://docs.rs/rqrr/badge.svg)](https://docs.rs/rqrr/)
+[![Build Status](https://travis-ci.com/WanzenBug/rqrr.svg?branch=master)](https://travis-ci.com/WanzenBug/rqrr)
 
 This crates exports functions and types that can be used to search for QR-Codes in images and
 decode them.
