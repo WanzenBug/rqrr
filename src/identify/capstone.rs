@@ -54,7 +54,7 @@ pub fn capstones_from_image(img: &mut SearchableImage) -> Vec<CapStone> {
             }
         }
     }
-
+    img.reset_regions();
     res
 }
 

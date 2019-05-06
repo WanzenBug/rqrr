@@ -221,12 +221,25 @@ impl SearchableImage {
         self.h
     }
 
+    pub(crate) fn reset_regions(&mut self)  {
+        self.unclaimed_count = 0;
+    }
+
     pub(crate) fn get_region(&mut self, (x, y): (usize, usize)) -> Region {
         let color: PixelColor = self[(x, y)].into();
         match color {
-            PixelColor::Discarded(r) => self.unclaimed_regions[r as usize],
-            PixelColor::Black => {
-                let next_reg_col = PixelColor::Discarded(self.unclaimed_count);
+            PixelColor::Discarded(r) if r < self.unclaimed_count => self.unclaimed_regions[r as usize],
+            PixelColor::Discarded(_)
+            | PixelColor::Black => {
+                let mut next_reg_col = PixelColor::Discarded(self.unclaimed_count);
+                // check if we try to recolor with the same color
+                if color == self.unclaimed_count + 6 {
+                    self.unclaimed_count += 1;
+                    if self.unclaimed_count == 250 {
+                        self.unclaimed_count = 0;
+                    }
+                    next_reg_col = PixelColor::Discarded(self.unclaimed_count)
+                }
                 let counter = self.repaint_and_apply((x, y), next_reg_col, AreaCounter(0));
                 let new_reg = Region::Unclaimed {
                     color: next_reg_col,

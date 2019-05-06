@@ -31,6 +31,11 @@ name = "test_cap_find"
 path = "tests/test_cap_find.rs"
 required-features = ["img"]
 
+[[test]]
+name = "test_full"
+path = "tests/test_full.rs"
+required-features = ["img"]
+
 [[bench]]
 name = "bench_cap_find"
 path = "benches/bench_cap_find.rs"
