@@ -272,6 +272,35 @@ impl SearchableImage {
         self.flood_fill(x, y, src, target_color.into(), fill)
     }
 
+    #[cfg(feature = "img")]
+    pub fn write_state_to(&self, p: &str) {
+        let mut dyn_img = image::RgbImage::new(self.w as u32, self.h as u32);
+        const COLORS: [[u8; 3]; 8] = [
+            [255, 0, 0],
+            [0, 255, 0],
+            [0, 0, 255],
+            [255, 255, 0],
+            [255, 0, 255],
+            [0, 255, 255],
+            [128, 128, 128],
+            [128, 0, 128],
+        ];
+        for y in 0..self.h {
+            for x in 0..self.w {
+                let px = self[(x, y)];
+                dyn_img.get_pixel_mut(x as u32, y as u32).data = if px == 0 {
+                    [255, 255, 255]
+                } else if px == 1{
+                    [0, 0, 0]
+                } else {
+                    let i = self[(x, y)] - 2;
+                    COLORS[(i % 8 ) as usize]
+                }
+            }
+        }
+        dyn_img.save(p).unwrap();
+    }
+
     fn flood_fill<F>(
         &mut self,
         x: usize,
