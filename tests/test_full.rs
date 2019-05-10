@@ -30,7 +30,6 @@ fn test_full_time() {
         println!("location setup: {}ms", now.elapsed().as_millis());
 
         let grid = location.into_grid_image(&search_img);
-
         let mut buf = Vec::new();
         let now = Instant::now();
         rqrr::decode(&grid, &mut buf).unwrap();

@@ -1,9 +1,9 @@
 use image;
 
 use rqrr;
-use rqrr::{capstones_from_image, find_groupings, Grid, SearchableImage, SkewedGridLocation};
+use rqrr::{capstones_from_image, find_groupings, Grid, SearchableImage, SkewedGridLocation, BasicImageBuffer};
 
-fn test_data(buffer: &[u8]) -> (rqrr::SearchableImage, Vec<rqrr::SkewedGridLocation>) {
+fn test_data(buffer: &[u8]) -> (rqrr::SearchableImage<BasicImageBuffer>, Vec<rqrr::SkewedGridLocation>) {
     let img = image::load_from_memory(buffer).unwrap();
     let mut bitimg = SearchableImage::from_dynamic(&img);
     let caps = capstones_from_image(&mut bitimg);

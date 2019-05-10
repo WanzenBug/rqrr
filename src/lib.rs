@@ -24,7 +24,7 @@
 use image;
 
 pub use self::decode::{decode, MetaData, Version};
-pub use self::identify::{CapStone, capstones_from_image, find_groupings, Point, SearchableImage, SkewedGridLocation};
+pub use self::identify::{CapStone, capstones_from_image, find_groupings, Point, SearchableImage, SkewedGridLocation, SearchableImageBuffer, BasicImageBuffer};
 
 mod decode;
 mod identify;
@@ -49,6 +49,21 @@ pub trait Grid {
     ///
     /// `true` means 'black', `false` means 'white'
     fn bit(&self, y: usize, x: usize) -> bool;
+
+    #[cfg(feature = "img")]
+    fn write_grid_to(&self, p: &str) {
+        let mut dyn_img = image::GrayImage::new(self.size() as u32, self.size() as u32);
+        for y in 0..self.size() {
+            for x in 0..self.size() {
+                let color = match self.bit(x, y) {
+                    true => 0,
+                    false => 255,
+                };
+                dyn_img.get_pixel_mut(x as u32, y as u32).data[0] = color;
+            }
+        }
+        dyn_img.save(p).unwrap();
+    }
 }
 
 /// A basic GridImage that can be generated from a given function.

@@ -1,21 +1,64 @@
 use std::cmp;
-use std::ops::Index;
-use std::ops::IndexMut;
-use std::ops::Range;
 
 use crate::identify::Point;
+use lru::LruCache;
 
 /// An black-and-white image that can be mutated on search for QR codes
 ///
 /// During search for QR codes, some black zones will be recolored in 'different' shades of black.
 /// This is done to speed up the search and mitigate the impact of a huge zones.
-#[derive(Clone)]
-pub struct SearchableImage {
+pub struct SearchableImage<S> {
+    buffer: S,
+    cache: LruCache<u8, Region>,
+}
+
+impl<S> Clone for SearchableImage<S> where S: Clone {
+    fn clone(&self) -> Self {
+        let mut cache = LruCache::new(self.cache.cap());
+        for (k, v) in self.cache.iter() {
+            cache.put(*k , v.clone());
+        }
+
+        SearchableImage {
+            buffer: self.buffer.clone(),
+            cache,
+        }
+    }
+}
+
+pub trait SearchableImageBuffer {
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+
+    fn get_pixel(&self, x: usize, y: usize) -> u8;
+    fn set_pixel(&mut self, x: usize, y: usize, val: u8);
+}
+
+#[derive(Clone, Debug)]
+pub struct BasicImageBuffer {
     w: usize,
     h: usize,
     pixels: Box<[u8]>,
-    unclaimed_regions: [Region; 250],
-    unclaimed_count: u8,
+}
+
+impl SearchableImageBuffer for BasicImageBuffer {
+    fn width(&self) -> usize {
+        self.w
+    }
+
+    fn height(&self) -> usize {
+        self.h
+    }
+
+    fn get_pixel(&self, x: usize, y: usize) -> u8 {
+        let w = self.width();
+        self.pixels[(y * w) + x]
+    }
+
+    fn set_pixel(&mut self, x: usize, y: usize, val: u8) {
+        let w = self.width();
+        self.pixels[(y * w) + x] = val
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -33,7 +76,6 @@ pub enum PixelColor {
     CapStone,
     Alignment,
     Tmp1,
-    Tmp2,
     Discarded(u8),
 }
 
@@ -48,7 +90,6 @@ pub enum Region {
     CapStone,
     Alignment,
     Tmp1,
-    Tmp2,
 }
 
 impl From<u8> for PixelColor {
@@ -59,8 +100,7 @@ impl From<u8> for PixelColor {
             2 => PixelColor::CapStone,
             3 => PixelColor::Alignment,
             4 => PixelColor::Tmp1,
-            5 => PixelColor::Tmp2,
-            x => PixelColor::Discarded(x - 6),
+            x => PixelColor::Discarded(x - 5),
         }
     }
 }
@@ -73,8 +113,7 @@ impl From<PixelColor> for u8 {
             PixelColor::CapStone => 2,
             PixelColor::Alignment => 3,
             PixelColor::Tmp1 => 4,
-            PixelColor::Tmp2 => 5,
-            PixelColor::Discarded(x) => x + 6,
+            PixelColor::Discarded(x) => x + 5,
         }
     }
 }
@@ -104,7 +143,7 @@ impl AreaFiller for AreaCounter {
     }
 }
 
-impl SearchableImage {
+impl SearchableImage<BasicImageBuffer> {
     /// Given an image, create a searchable copy of it
     ///
     /// This first converts the image to greyscale before filling its own buffer
@@ -137,18 +176,14 @@ impl SearchableImage {
             }
         }
         let pixels = pixels.into_boxed_slice();
-
-        SearchableImage {
+        let buffer = BasicImageBuffer {
             w,
             h,
             pixels,
-            unclaimed_regions: [Region::Unclaimed {
-                color: PixelColor::White,
-                pixel_count: 0,
-                src_x: 0,
-                src_y: 0,
-            }; 250],
-            unclaimed_count: 0,
+        };
+        SearchableImage {
+            buffer,
+            cache: LruCache::new(251),
         }
     }
 
@@ -197,66 +232,66 @@ impl SearchableImage {
         }
 
         let pixels = data.into_boxed_slice();
-        SearchableImage {
+        let buffer = BasicImageBuffer {
             w,
             h,
             pixels,
-            unclaimed_regions: [Region::Unclaimed {
-                color: PixelColor::White,
-                pixel_count: 0,
-                src_x: 0,
-                src_y: 0,
-            }; 250],
-            unclaimed_count: 0,
+        };
+        SearchableImage {
+            buffer,
+            cache: LruCache::new(251),
         }
     }
+}
 
+impl<S> SearchableImage<S> where S: SearchableImageBuffer {
     /// Return the width of the image
     pub fn width(&self) -> usize {
-        self.w
+        self.buffer.width()
     }
 
     /// Return the height of the image
     pub fn height(&self) -> usize {
-        self.h
-    }
-
-    pub(crate) fn reset_regions(&mut self)  {
-        self.unclaimed_count = 0;
+        self.buffer.height()
     }
 
     pub(crate) fn get_region(&mut self, (x, y): (usize, usize)) -> Region {
-        let color: PixelColor = self[(x, y)].into();
+        let color: PixelColor = self.buffer.get_pixel(x, y).into();
         match color {
-            PixelColor::Discarded(r) if r < self.unclaimed_count => self.unclaimed_regions[r as usize],
-            PixelColor::Discarded(_)
-            | PixelColor::Black => {
-                let mut next_reg_col = PixelColor::Discarded(self.unclaimed_count);
-                // check if we try to recolor with the same color
-                if color == self.unclaimed_count + 6 {
-                    self.unclaimed_count += 1;
-                    if self.unclaimed_count == 250 {
-                        self.unclaimed_count = 0;
+            PixelColor::Discarded(r) => {
+                self.cache.get(&r).unwrap().clone()
+            },
+            PixelColor::Black => {
+                let cache_fill = self.cache.len();
+                let reg_idx = if cache_fill == self.cache.cap() {
+                    let (c, reg) = self.cache.pop_lru().expect("fill is at capacity (251)");
+                    match reg {
+                        Region::Unclaimed {
+                            src_x,
+                            src_y,
+                            color,
+                            ..
+                        } => {
+                            self.flood_fill(src_x, src_y, color.into(), PixelColor::Black.into(), |_| ());
+                        }
+                        _ => (),
                     }
-                    next_reg_col = PixelColor::Discarded(self.unclaimed_count)
-                }
-                let counter = self.repaint_and_apply((x, y), next_reg_col, AreaCounter(0));
+                    c
+                } else {
+                    cache_fill as u8
+                };
+                let next_reg_color = PixelColor::Discarded(reg_idx);
+                let counter = self.repaint_and_apply((x, y), next_reg_color, AreaCounter(0));
                 let new_reg = Region::Unclaimed {
-                    color: next_reg_col,
+                    color: next_reg_color,
                     src_x: x,
                     src_y: y,
                     pixel_count: counter.0,
                 };
-                self.unclaimed_regions[self.unclaimed_count as usize] = new_reg;
-
-                self.unclaimed_count += 1;
-                if self.unclaimed_count == 250 {
-                    self.unclaimed_count = 0;
-                }
+                self.cache.put(reg_idx, new_reg);
                 new_reg
             }
             PixelColor::Tmp1 => Region::Tmp1,
-            PixelColor::Tmp2 => Region::Tmp2,
             PixelColor::Alignment => Region::Alignment,
             PixelColor::CapStone => Region::CapStone,
             PixelColor::White => panic!("Tried to color white patch"),
@@ -264,7 +299,7 @@ impl SearchableImage {
     }
 
     pub(crate) fn repaint_and_apply<F>(&mut self, (x, y): (usize, usize), target_color: PixelColor, fill: F) -> F where F: AreaFiller {
-        let src = self[(x, y)];
+        let src = self.buffer.get_pixel(x, y);
         if PixelColor::White == src || target_color == src {
             panic!("Cannot repaint with white or same color");
         }
@@ -272,9 +307,24 @@ impl SearchableImage {
         self.flood_fill(x, y, src, target_color.into(), fill)
     }
 
+    pub fn get_pixel_at_point(&self, p: Point) -> PixelColor {
+        if p.x < 0 || p.x as usize >= self.width() {
+            panic!("Out of bounds pixel access");
+        }
+        if p.y < 0 || p.y as usize >= self.height() {
+            panic!("Out of bounds pixel access");
+        }
+
+        self.buffer.get_pixel(p.x as usize, p.y as usize).into()
+    }
+
+    pub fn get_pixel_at(&self, x: usize, y: usize) -> PixelColor {
+        self.buffer.get_pixel(x, y).into()
+    }
+
     #[cfg(feature = "img")]
     pub fn write_state_to(&self, p: &str) {
-        let mut dyn_img = image::RgbImage::new(self.w as u32, self.h as u32);
+        let mut dyn_img = image::RgbImage::new(self.width() as u32, self.height() as u32);
         const COLORS: [[u8; 3]; 8] = [
             [255, 0, 0],
             [0, 255, 0],
@@ -285,15 +335,15 @@ impl SearchableImage {
             [128, 128, 128],
             [128, 0, 128],
         ];
-        for y in 0..self.h {
-            for x in 0..self.w {
-                let px = self[(x, y)];
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                let px = self.buffer.get_pixel(x, y);
                 dyn_img.get_pixel_mut(x as u32, y as u32).data = if px == 0 {
                     [255, 255, 255]
                 } else if px == 1{
                     [0, 0, 0]
                 } else {
-                    let i = self[(x, y)] - 2;
+                    let i = self.buffer.get_pixel(x, y) - 2;
                     COLORS[(i % 8 ) as usize]
                 }
             }
@@ -311,31 +361,30 @@ impl SearchableImage {
     ) -> F where F: AreaFiller {
         assert_ne!(from, to);
 
-        let w = self.w;
+        let w = self.width();
         let mut queue = Vec::new();
         queue.push((x, y));
         while !queue.is_empty() {
             let (x, y) = queue.pop().expect("Just checked, queue is not empty");
 
             // Bail early in case there is nothing to fill
-            if self[(x, y)] == to || self[(x, y)] != from {
+            if self.buffer.get_pixel(x, y) == to || self.buffer.get_pixel(x, y) != from {
                 continue;
             }
 
             let mut left = x;
             let mut right = x;
             {
-                let row = &mut self[(0..w, y)];
-                while left > 0 && row[left - 1] == from {
+                while left > 0 && self.buffer.get_pixel(left - 1, y) == from {
                     left -= 1;
                 }
-                while right < w - 1 && row[right + 1] == from {
+                while right < w - 1 && self.buffer.get_pixel(right + 1, y) == from {
                     right += 1
                 }
 
                 /* Fill the extent */
-                for p in &mut row[left..right + 1] {
-                    *p = to;
+                for idx in left..=right {
+                    self.buffer.set_pixel(idx, y, to);
                 }
             }
 
@@ -349,7 +398,7 @@ impl SearchableImage {
             if y > 0 {
                 let mut seeded_previous = false;
                 for x in left..=right {
-                    let p = self[(x, y - 1)];
+                    let p = self.buffer.get_pixel(x, y - 1);
                     if p == from {
                         if !seeded_previous {
                             queue.push((x, y - 1));
@@ -360,10 +409,10 @@ impl SearchableImage {
                     }
                 }
             }
-            if y < self.h - 1 {
+            if y < self.height() - 1 {
                 let mut seeded_previous = false;
                 for x in left..=right {
-                    let p = self[(x, y + 1)];
+                    let p = self.buffer.get_pixel(x, y + 1);
                     if p == from {
                         if !seeded_previous {
                             queue.push((x, y + 1));
@@ -379,69 +428,11 @@ impl SearchableImage {
     }
 }
 
-
-impl Index<(Range<usize>, usize)> for SearchableImage {
-    type Output = [u8];
-
-    fn index(&self, (xs, y): (Range<usize>, usize)) -> &<Self as Index<(Range<usize>, usize)>>::Output {
-        let start = y * self.w + xs.start;
-        let end = y * self.w + xs.end;
-        &self.pixels[start..end]
-    }
-}
-
-impl IndexMut<(Range<usize>, usize)> for SearchableImage {
-    fn index_mut(&mut self, (xs, y): (Range<usize>, usize)) -> &mut <Self as Index<(Range<usize>, usize)>>::Output {
-        let start = y * self.w + xs.start;
-        let end = y * self.w + xs.end;
-        &mut self.pixels[start..end]
-    }
-}
-
-impl Index<Point> for SearchableImage {
-    type Output = u8;
-
-    fn index(&self, index: Point) -> &<Self as Index<Point>>::Output {
-        assert!(index.x >= 0);
-        assert!((index.x as usize) < self.w);
-        assert!(index.y >= 0);
-        assert!((index.y as usize) < self.h);
-
-        &self[(index.x as usize, index.y as usize)]
-    }
-}
-
-impl IndexMut<Point> for SearchableImage {
-    fn index_mut(&mut self, index: Point) -> &mut <Self as Index<Point>>::Output {
-        assert!(index.x >= 0);
-        assert!((index.x as usize) < self.w);
-        assert!(index.y >= 0);
-        assert!((index.y as usize) < self.h);
-
-        &mut self[(index.x as usize, index.y as usize)]
-    }
-}
-
-
-impl Index<(usize, usize)> for SearchableImage {
-    type Output = u8;
-
-    fn index(&self, (x, y): (usize, usize)) -> &<Self as Index<(usize, usize)>>::Output {
-        &self.pixels[y * self.w + x]
-    }
-}
-
-impl IndexMut<(usize, usize)> for SearchableImage {
-    fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut <Self as Index<(usize, usize)>>::Output {
-        &mut self.pixels[y * self.w + x]
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn img_from_array(array: [[u8; 3]; 3]) -> SearchableImage {
+    fn img_from_array(array: [[u8; 3]; 3]) -> SearchableImage<BasicImageBuffer> {
         let mut pixels = Vec::new();
         for col in array.iter() {
             for item in col.iter() {
@@ -452,18 +443,15 @@ mod tests {
                 }
             }
         }
-
-        SearchableImage {
+        let buffer = BasicImageBuffer {
             w: 3,
             h: 3,
             pixels: pixels.into_boxed_slice(),
-            unclaimed_count: 0,
-            unclaimed_regions: [Region::Unclaimed {
-                src_y: 0,
-                src_x: 0,
-                color: PixelColor::White,
-                pixel_count: 0,
-            }; 250],
+        };
+
+        SearchableImage {
+            buffer,
+            cache: LruCache::new(251)
         }
     }
 
@@ -479,7 +467,7 @@ mod tests {
 
         for x in 0..3 {
             for y in 0..3 {
-                assert_eq!(test_full[(x, y)], 2);
+                assert_eq!(test_full.get_pixel_at(x, y), 2);
             }
         }
     }
@@ -497,14 +485,14 @@ mod tests {
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && y == 1 {
-                    assert_eq!(test_single[(x, y)], 2);
+                    assert_eq!(test_single.get_pixel_at(x, y), 2);
                 } else {
                     let col = if (x + y) % 2 == 0 {
                         1
                     } else {
                         0
                     };
-                    assert_eq!(test_single[(x, y)], col);
+                    assert_eq!(test_single.get_pixel_at(x, y), col);
                 }
             }
         }
@@ -523,9 +511,9 @@ mod tests {
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && y == 1 {
-                    assert_eq!(test_ring[(x, y)], 0);
+                    assert_eq!(test_ring.get_pixel_at(x, y), 0);
                 } else {
-                    assert_eq!(test_ring[(x, y)], 2);
+                    assert_eq!(test_ring.get_pixel_at(x, y), 2);
                 }
             }
         }
@@ -545,9 +533,9 @@ mod tests {
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && (y == 0 || y == 1) {
-                    assert_eq!(test_u[(x, y)], 0);
+                    assert_eq!(test_u.get_pixel_at(x, y), 0);
                 } else {
-                    assert_eq!(test_u[(x, y)], 2);
+                    assert_eq!(test_u.get_pixel_at(x, y), 2);
                 }
             }
         }
@@ -565,7 +553,7 @@ mod tests {
 
         for x in 0..3 {
             for y in 0..3 {
-                assert_eq!(test_empty[(x, y)], 0)
+                assert_eq!(test_empty.get_pixel_at(x, y), 0)
             }
         }
     }
@@ -594,9 +582,9 @@ mod tests {
         for x in 0..3 {
             for y in 0..3 {
                 if x == 1 && (y == 0 || y == 1) {
-                    assert_eq!(PixelColor::White, test_u[(x, y)]);
+                    assert_eq!(PixelColor::White, test_u.get_pixel_at(x, y));
                 } else {
-                    assert_eq!(color, test_u[(x, y)]);
+                    assert_eq!(color, test_u.get_pixel_at(x, y));
                 }
             }
         }

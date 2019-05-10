@@ -4,7 +4,7 @@ use image;
 
 use rqrr;
 
-fn find_caps(mut img: rqrr::SearchableImage) -> Vec<rqrr::CapStone> {
+fn find_caps<S>(mut img: rqrr::SearchableImage<S>) -> Vec<rqrr::CapStone> where S: rqrr::SearchableImageBuffer {
     rqrr::capstones_from_image(&mut img)
 }
 
