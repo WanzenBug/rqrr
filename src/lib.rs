@@ -24,11 +24,15 @@
 use image;
 
 pub use self::decode::{decode, MetaData, Version};
-pub use self::identify::{CapStone, capstones_from_image, find_groupings, Point, SearchableImage, SkewedGridLocation, SearchableImageBuffer, BasicImageBuffer};
+pub use self::identify::{CapStone, capstones_from_image, find_groupings, Point,  SkewedGridLocation};
+pub use self::prepare::{PreparedImage};
 
 mod decode;
 mod identify;
 mod version_db;
+mod prepare;
+
+
 
 /// A grid that contains exactly one QR code square.
 ///
@@ -213,7 +217,7 @@ pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
 /// assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
 /// ```
 pub fn find_and_decode_from_func<F>(width: usize, height: usize, fill: F) -> Vec<Code> where F: FnMut(usize, usize) -> u8 {
-    let mut img = SearchableImage::from_greyscale(width, height, fill);
+    let mut img = PreparedImage::prepare_from_greyscale(width, height, fill);
     let caps = capstones_from_image(&mut img);
     let groups = find_groupings(caps);
     let grids: Vec<_> = groups.into_iter()

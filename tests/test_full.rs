@@ -9,7 +9,7 @@ fn test_full_time() {
     let jpg = image::open("tests/data/full/gogh.jpg").unwrap();
 
     let now = Instant::now();
-    let mut search_img = rqrr::SearchableImage::from_dynamic(&jpg);
+    let mut search_img = rqrr::PreparedImage::prepare(jpg.to_luma());
     println!("leveling: {}ms", now.elapsed().as_millis());
 
     let now = Instant::now();

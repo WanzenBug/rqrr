@@ -7,31 +7,50 @@ use lru::LruCache;
 ///
 /// During search for QR codes, some black zones will be recolored in 'different' shades of black.
 /// This is done to speed up the search and mitigate the impact of a huge zones.
-pub struct SearchableImage<S> {
+pub struct PreparedImage<S> {
     buffer: S,
-    cache: LruCache<u8, Region>,
+    cache: LruCache<u8, ColoredRegion>,
 }
 
-impl<S> Clone for SearchableImage<S> where S: Clone {
+impl<S> Clone for PreparedImage<S> where S: Clone {
     fn clone(&self) -> Self {
         let mut cache = LruCache::new(self.cache.cap());
         for (k, v) in self.cache.iter() {
-            cache.put(*k , v.clone());
+            cache.put(*k, v.clone());
         }
 
-        SearchableImage {
+        PreparedImage {
             buffer: self.buffer.clone(),
             cache,
         }
     }
 }
 
-pub trait SearchableImageBuffer {
+pub trait ImageBuffer {
     fn width(&self) -> usize;
     fn height(&self) -> usize;
 
     fn get_pixel(&self, x: usize, y: usize) -> u8;
     fn set_pixel(&mut self, x: usize, y: usize, val: u8);
+}
+
+#[cfg(feature = "img")]
+impl ImageBuffer for image::GrayImage {
+    fn width(&self) -> usize {
+        self.width() as usize
+    }
+
+    fn height(&self) -> usize {
+        self.height() as usize
+    }
+
+    fn get_pixel(&self, x: usize, y: usize) -> u8 {
+        self.get_pixel(x as u32, y as u32).data[0]
+    }
+
+    fn set_pixel(&mut self, x: usize, y: usize, val: u8) {
+        self.get_pixel_mut(x as u32, y as u32).data[0] = val;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -41,7 +60,7 @@ pub struct BasicImageBuffer {
     pixels: Box<[u8]>,
 }
 
-impl SearchableImageBuffer for BasicImageBuffer {
+impl ImageBuffer for BasicImageBuffer {
     fn width(&self) -> usize {
         self.w
     }
@@ -80,7 +99,7 @@ pub enum PixelColor {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Region {
+pub enum ColoredRegion {
     Unclaimed {
         color: PixelColor,
         src_x: usize,
@@ -143,61 +162,10 @@ impl AreaFiller for AreaCounter {
     }
 }
 
-impl SearchableImage<BasicImageBuffer> {
-    /// Given an image, create a searchable copy of it
-    ///
-    /// This first converts the image to greyscale before filling its own buffer
-    #[cfg(feature = "img")]
-    pub fn from_dynamic(img: &image::DynamicImage) -> Self {
-        use image::GenericImageView;
-        let gray = img.to_luma();
-        let w = gray.width() as usize;
-        let h = gray.height() as usize;
-        SearchableImage::from_greyscale(w, h, |x, y| {
-            img.get_pixel(x as u32, y as u32).data[0]
-        })
-    }
-
-    /// Given a function with binary output, generate a searchable image
-    ///
-    /// If the given function returns `true` the matching pixel will be 'black'.
-    pub fn from_bitmap<F>(w: usize, h: usize, mut fill: F) -> Self where F: FnMut(usize, usize) -> bool {
-        let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
-        let mut pixels = Vec::with_capacity(capacity);
-
-        for y in 0..h {
-            for x in 0..w {
-                let col = if fill(x, y) {
-                    PixelColor::Black
-                } else {
-                    PixelColor::White
-                };
-                pixels.push(col.into())
-            }
-        }
-        let pixels = pixels.into_boxed_slice();
-        let buffer = BasicImageBuffer {
-            w,
-            h,
-            pixels,
-        };
-        SearchableImage {
-            buffer,
-            cache: LruCache::new(251),
-        }
-    }
-
-    /// Given a byte valued function, generate a searchable image
-    ///
-    /// The values returned by the function are interpreted as luminance. i.e. a value of
-    /// 0 is black, 255 is white.
-    pub fn from_greyscale<F>(w: usize,
-                             h: usize,
-                             mut fill: F,
-    ) -> Self where F: FnMut(usize, usize) -> u8 {
-        let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
-        let mut data = Vec::with_capacity(capacity);
-
+impl<S> PreparedImage<S> where S: ImageBuffer {
+    pub fn prepare(mut buf: S) -> Self {
+        let w = buf.width();
+        let h = buf.height();
         let mut row_average = vec![0; w];
         let mut avg_v = 0;
         let mut avg_u = 0;
@@ -215,36 +183,41 @@ impl SearchableImage<BasicImageBuffer> {
                 } else {
                     (x, w - 1 - x)
                 };
-                avg_v = avg_v * (threshold_s - 1) / threshold_s + fill(v, y) as usize;
-                avg_u = avg_u * (threshold_s - 1) / threshold_s + fill(u, y) as usize;
+                avg_v = avg_v * (threshold_s - 1) / threshold_s + buf.get_pixel(v, y) as usize;
+                avg_u = avg_u * (threshold_s - 1) / threshold_s + buf.get_pixel(u, y) as usize;
                 row_average[v] += avg_v;
                 row_average[u] += avg_u;
             }
 
             for x in 0..w {
-                let fill = if (fill(x, y) as usize) < row_average[x] * (100 - 5) / (200 * threshold_s) {
-                    1
+                let fill = if (buf.get_pixel(x, y) as usize) < row_average[x] * (100 - 5) / (200 * threshold_s) {
+                    PixelColor::Black
                 } else {
-                    0
+                    PixelColor::White
                 };
-                data.push(fill);
+                buf.set_pixel(x, y, fill.into());
             }
         }
 
-        let pixels = data.into_boxed_slice();
-        let buffer = BasicImageBuffer {
-            w,
-            h,
-            pixels,
-        };
-        SearchableImage {
-            buffer,
-            cache: LruCache::new(251),
+        PreparedImage {
+            buffer: buf,
+            cache: LruCache::new(251)
         }
     }
-}
 
-impl<S> SearchableImage<S> where S: SearchableImageBuffer {
+    pub fn without_preparation(buf: S) -> Self {
+        for y in 0..buf.height() {
+            for x in 0..buf.width() {
+                assert!(buf.get_pixel(x, y) < 2);
+            }
+        }
+
+        PreparedImage {
+            buffer: buf,
+            cache: LruCache::new(251)
+        }
+    }
+
     /// Return the width of the image
     pub fn width(&self) -> usize {
         self.buffer.width()
@@ -255,18 +228,18 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
         self.buffer.height()
     }
 
-    pub(crate) fn get_region(&mut self, (x, y): (usize, usize)) -> Region {
+    pub(crate) fn get_region(&mut self, (x, y): (usize, usize)) -> ColoredRegion {
         let color: PixelColor = self.buffer.get_pixel(x, y).into();
         match color {
             PixelColor::Discarded(r) => {
                 self.cache.get(&r).unwrap().clone()
-            },
+            }
             PixelColor::Black => {
                 let cache_fill = self.cache.len();
                 let reg_idx = if cache_fill == self.cache.cap() {
                     let (c, reg) = self.cache.pop_lru().expect("fill is at capacity (251)");
                     match reg {
-                        Region::Unclaimed {
+                        ColoredRegion::Unclaimed {
                             src_x,
                             src_y,
                             color,
@@ -282,7 +255,7 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
                 };
                 let next_reg_color = PixelColor::Discarded(reg_idx);
                 let counter = self.repaint_and_apply((x, y), next_reg_color, AreaCounter(0));
-                let new_reg = Region::Unclaimed {
+                let new_reg = ColoredRegion::Unclaimed {
                     color: next_reg_color,
                     src_x: x,
                     src_y: y,
@@ -291,9 +264,9 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
                 self.cache.put(reg_idx, new_reg);
                 new_reg
             }
-            PixelColor::Tmp1 => Region::Tmp1,
-            PixelColor::Alignment => Region::Alignment,
-            PixelColor::CapStone => Region::CapStone,
+            PixelColor::Tmp1 => ColoredRegion::Tmp1,
+            PixelColor::Alignment => ColoredRegion::Alignment,
+            PixelColor::CapStone => ColoredRegion::CapStone,
             PixelColor::White => panic!("Tried to color white patch"),
         }
     }
@@ -340,11 +313,11 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
                 let px = self.buffer.get_pixel(x, y);
                 dyn_img.get_pixel_mut(x as u32, y as u32).data = if px == 0 {
                     [255, 255, 255]
-                } else if px == 1{
+                } else if px == 1 {
                     [0, 0, 0]
                 } else {
                     let i = self.buffer.get_pixel(x, y) - 2;
-                    COLORS[(i % 8 ) as usize]
+                    COLORS[(i % 8) as usize]
                 }
             }
         }
@@ -360,13 +333,11 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
         mut fill: F,
     ) -> F where F: AreaFiller {
         assert_ne!(from, to);
-
         let w = self.width();
         let mut queue = Vec::new();
         queue.push((x, y));
-        while !queue.is_empty() {
-            let (x, y) = queue.pop().expect("Just checked, queue is not empty");
 
+        while let Some((x, y)) = queue.pop() {
             // Bail early in case there is nothing to fill
             if self.buffer.get_pixel(x, y) == to || self.buffer.get_pixel(x, y) != from {
                 continue;
@@ -374,19 +345,19 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
 
             let mut left = x;
             let mut right = x;
-            {
-                while left > 0 && self.buffer.get_pixel(left - 1, y) == from {
-                    left -= 1;
-                }
-                while right < w - 1 && self.buffer.get_pixel(right + 1, y) == from {
-                    right += 1
-                }
 
-                /* Fill the extent */
-                for idx in left..=right {
-                    self.buffer.set_pixel(idx, y, to);
-                }
+            while left > 0 && self.buffer.get_pixel(left - 1, y) == from {
+                left -= 1;
             }
+            while right < w - 1 && self.buffer.get_pixel(right + 1, y) == from {
+                right += 1
+            }
+
+            /* Fill the extent */
+            for idx in left..=right {
+                self.buffer.set_pixel(idx, y, to);
+            }
+
 
             fill.update(Row {
                 left,
@@ -428,11 +399,63 @@ impl<S> SearchableImage<S> where S: SearchableImageBuffer {
     }
 }
 
+impl PreparedImage<BasicImageBuffer> {
+    /// Given a function with binary output, generate a searchable image
+    ///
+    /// If the given function returns `true` the matching pixel will be 'black'.
+    pub fn prepare_from_bitmap<F>(w: usize, h: usize, mut fill: F) -> Self where F: FnMut(usize, usize) -> bool {
+        let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
+        let mut pixels = Vec::with_capacity(capacity);
+
+        for y in 0..h {
+            for x in 0..w {
+                let col = if fill(x, y) {
+                    PixelColor::Black
+                } else {
+                    PixelColor::White
+                };
+                pixels.push(col.into())
+            }
+        }
+        let pixels = pixels.into_boxed_slice();
+        let buffer = BasicImageBuffer {
+            w,
+            h,
+            pixels,
+        };
+        PreparedImage::without_preparation(buffer)
+    }
+
+    /// Given a byte valued function, generate a searchable image
+    ///
+    /// The values returned by the function are interpreted as luminance. i.e. a value of
+    /// 0 is black, 255 is white.
+    pub fn prepare_from_greyscale<F>(w: usize,
+                                     h: usize,
+                                     mut fill: F,
+    ) -> Self where F: FnMut(usize, usize) -> u8 {
+        let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
+        let mut data = Vec::with_capacity(capacity);
+        for y in 0..h {
+            for x in 0..w {
+                data.push(fill(x, y));
+            }
+        }
+        let pixels = data.into_boxed_slice();
+        let buffer = BasicImageBuffer {
+            w,
+            h,
+            pixels,
+        };
+        PreparedImage::prepare(buffer)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn img_from_array(array: [[u8; 3]; 3]) -> SearchableImage<BasicImageBuffer> {
+    fn img_from_array(array: [[u8; 3]; 3]) -> PreparedImage<BasicImageBuffer> {
         let mut pixels = Vec::new();
         for col in array.iter() {
             for item in col.iter() {
@@ -449,9 +472,9 @@ mod tests {
             pixels: pixels.into_boxed_slice(),
         };
 
-        SearchableImage {
+        PreparedImage {
             buffer,
-            cache: LruCache::new(251)
+            cache: LruCache::new(251),
         }
     }
 
@@ -568,7 +591,7 @@ mod tests {
 
         let reg = test_u.get_region((0, 0));
         let (color, src_x, src_y, pixel_count) = match reg {
-            Region::Unclaimed {
+            ColoredRegion::Unclaimed {
                 color,
                 src_x,
                 src_y,

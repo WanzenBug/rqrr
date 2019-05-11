@@ -1,11 +1,9 @@
 pub use self::capstone::{CapStone, capstones_from_image};
 pub use self::grid::SkewedGridLocation;
 pub use self::helper::Perspective;
-pub use self::image::{PixelColor, SearchableImage, BasicImageBuffer, SearchableImageBuffer};
 pub use self::match_capstones::find_groupings;
 
 mod helper;
-mod image;
 mod capstone;
 mod match_capstones;
 mod grid;

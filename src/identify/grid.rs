@@ -7,18 +7,19 @@ use crate::{
     CapStone,
     Grid,
     identify::{
-        image::Region,
+        helper,
         match_capstones::CapStoneGroup,
     },
-    SearchableImage,
-    version_db::VERSION_DATA_BASE,
-};
-use crate::identify::image::{AreaFiller, Row, SearchableImageBuffer};
-
-use super::{
-    helper,
-    PixelColor,
     Point,
+    prepare::{
+        AreaFiller,
+        ImageBuffer,
+        PixelColor,
+        ColoredRegion,
+        Row,
+    },
+    prepare::PreparedImage,
+    version_db::VERSION_DATA_BASE,
 };
 
 /// Location of a skewed square in an image
@@ -46,7 +47,7 @@ impl SkewedGridLocation {
     /// For bigger grids this includes searching for an alignment pattern in the 4 corner.
     ///
     /// If no sufficient match could be produces, return `None` instead.
-    pub fn from_group<S>(img: &mut SearchableImage<S>, mut group: CapStoneGroup) -> Option<Self> where S: SearchableImageBuffer{
+    pub fn from_group<S>(img: &mut PreparedImage<S>, mut group: CapStoneGroup) -> Option<Self> where S: ImageBuffer {
         /* Construct the hypotenuse line from A to C. B should be to
          * the left of this line.
          */
@@ -96,7 +97,7 @@ impl SkewedGridLocation {
                 best: align,
                 score,
             };
-            let found = img.repaint_and_apply((align.x as usize, align.y as usize),PixelColor::Alignment, finder);
+            let found = img.repaint_and_apply((align.x as usize, align.y as usize), PixelColor::Alignment, finder);
             align = found.best;
         }
 
@@ -112,7 +113,7 @@ impl SkewedGridLocation {
     }
 
     /// Convert into a grid referencing the underlying image as source
-    pub fn into_grid_image<S>(self, img: &SearchableImage<S>) -> RefGridImage<S> {
+    pub fn into_grid_image<S>(self, img: &PreparedImage<S>) -> RefGridImage<S> {
         RefGridImage {
             grid: self,
             img,
@@ -126,10 +127,10 @@ impl SkewedGridLocation {
 /// be decoded by [decode](fn.decode.html)
 pub struct RefGridImage<'a, S> {
     grid: SkewedGridLocation,
-    img: &'a SearchableImage<S>,
+    img: &'a PreparedImage<S>,
 }
 
-impl<'a, S> Grid for RefGridImage<'a, S> where S: SearchableImageBuffer {
+impl<'a, S> Grid for RefGridImage<'a, S> where S: ImageBuffer {
     fn size(&self) -> usize {
         self.grid.grid_size
     }
@@ -140,7 +141,7 @@ impl<'a, S> Grid for RefGridImage<'a, S> where S: SearchableImageBuffer {
     }
 }
 
-fn setup_perspective<S>(img: &SearchableImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective where S: SearchableImageBuffer {
+fn setup_perspective<S>(img: &PreparedImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective where S: ImageBuffer {
     let inital = helper::Perspective::create(&[
         caps.1.corners[0],
         caps.2.corners[0],
@@ -177,9 +178,9 @@ fn rotate_capstone(
 // * a horizontal and a vertical timing scan.
 // */
 fn measure_timing_pattern<S>(
-    img: &SearchableImage<S>,
+    img: &PreparedImage<S>,
     caps: &CapStoneGroup,
-) -> usize where S: SearchableImageBuffer {
+) -> usize where S: ImageBuffer {
     const US: [f64; 3] = [6.5f64, 6.5f64, 0.5f64];
     const VS: [f64; 3] = [0.5f64, 6.5f64, 6.5f64];
     let tpet0 = caps.0.c.map(US[0], VS[0]);
@@ -199,10 +200,10 @@ fn measure_timing_pattern<S>(
 }
 
 fn timing_scan<S>(
-    img: &SearchableImage<S>,
+    img: &PreparedImage<S>,
     p0: &Point,
     p1: &Point,
-) -> usize where S: SearchableImageBuffer {
+) -> usize where S: ImageBuffer {
     let mut run_length = 0;
     let mut count = 0;
     for p in helper::BresenhamScan::new(p0, p1) {
@@ -221,7 +222,7 @@ fn timing_scan<S>(
 }
 
 
-fn find_alignment_pattern<S>(img: &mut SearchableImage<S>, mut align_seed: Point, c0: &CapStone, c2: &CapStone) -> Option<Point> where S: SearchableImageBuffer {
+fn find_alignment_pattern<S>(img: &mut PreparedImage<S>, mut align_seed: Point, c0: &CapStone, c2: &CapStone) -> Option<Point> where S: ImageBuffer {
     /* Guess another two corners of the alignment pattern so that we
      * can estimate its size.
      */
@@ -250,7 +251,7 @@ fn find_alignment_pattern<S>(img: &mut SearchableImage<S>, mut align_seed: Point
             if PixelColor::White != img.get_pixel_at(x, y) {
                 let region = img.get_region((x, y));
                 let count = match region {
-                    Region::Unclaimed { pixel_count, .. } => { pixel_count }
+                    ColoredRegion::Unclaimed { pixel_count, .. } => { pixel_count }
                     _ => continue,
                 };
 
@@ -299,7 +300,7 @@ impl AreaFiller for LeftMostFinder {
 }
 
 
-fn jiggle_perspective<S>(img: &SearchableImage<S>, mut perspective: helper::Perspective, grid_size: usize) -> helper::Perspective where S: SearchableImageBuffer {
+fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: helper::Perspective, grid_size: usize) -> helper::Perspective where S: ImageBuffer {
     let mut best = fitness_all(img, &perspective, grid_size);
     let mut adjustments: [f64; 8] = [
         perspective.0[0] * 0.02f64,
@@ -343,7 +344,7 @@ fn jiggle_perspective<S>(img: &SearchableImage<S>, mut perspective: helper::Pers
  * transform, using the features we expect to find by scanning the
  * grid.
  */
-fn fitness_all<S>(img: &SearchableImage<S>, perspective: &helper::Perspective, grid_size: usize) -> i32 where S: SearchableImageBuffer{
+fn fitness_all<S>(img: &PreparedImage<S>, perspective: &helper::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
     let version = (grid_size - 17) / 4;
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
@@ -378,23 +379,23 @@ fn fitness_all<S>(img: &SearchableImage<S>, perspective: &helper::Perspective, g
 }
 
 fn fitness_apat<S>(
-    img: &SearchableImage<S>,
+    img: &PreparedImage<S>,
     perspective: &helper::Perspective,
     cx: i32,
     cy: i32,
-) -> i32 where S: SearchableImageBuffer {
+) -> i32 where S: ImageBuffer {
     fitness_cell(img, perspective, cx, cy)
         - fitness_ring(img, perspective, cx, cy, 1)
         + fitness_ring(img, perspective, cx, cy, 2)
 }
 
 fn fitness_ring<S>(
-    img: &SearchableImage<S>,
+    img: &PreparedImage<S>,
     perspective: &helper::Perspective,
     cx: i32,
     cy: i32,
     radius: i32,
-) -> i32 where S: SearchableImageBuffer{
+) -> i32 where S: ImageBuffer {
     let mut score = 0;
     for i in 0..(radius * 2) {
         score += fitness_cell(img, perspective, cx - radius + i, cy - radius);
@@ -406,11 +407,11 @@ fn fitness_ring<S>(
 }
 
 fn fitness_cell<S>(
-    img: &SearchableImage<S>,
+    img: &PreparedImage<S>,
     perspective: &helper::Perspective,
     x: i32,
     y: i32,
-) -> i32 where S: SearchableImageBuffer {
+) -> i32 where S: ImageBuffer {
     const OFFSETS: [f64; 3] = [0.3f64, 0.5f64, 0.7f64];
     let mut score = 0;
     for v in 0..3 {
@@ -430,11 +431,11 @@ fn fitness_cell<S>(
 
 
 fn fitness_capstone<S>(
-    img: &SearchableImage<S>,
+    img: &PreparedImage<S>,
     perspective: &helper::Perspective,
     x: i32,
     y: i32,
-) -> i32 where S: SearchableImageBuffer {
+) -> i32 where S: ImageBuffer {
     fitness_cell(img, perspective, x + 3, y + 3)
         + fitness_ring(img, perspective, x + 3, y + 3, 1)
         - fitness_ring(img, perspective, x + 3, y + 3, 2)

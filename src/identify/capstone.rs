@@ -1,13 +1,13 @@
 use crate::{
     identify::{
         Point,
-        image::{Region, SearchableImage, Row},
-        helper::Perspective,
-    }
-};
-use crate::identify::image::{AreaFiller, SearchableImageBuffer};
 
-use super::PixelColor;
+        helper::Perspective,
+    },
+    prepare::{ColoredRegion, PreparedImage, Row},
+};
+use crate::prepare::{AreaFiller, ImageBuffer, PixelColor};
+
 
 /// A locator pattern of a QR grid
 ///
@@ -40,7 +40,7 @@ pub struct PolygonScoreData {
 /// 1:1:3:1:1 pattern of black-white-black-white-black zones.
 ///
 /// Returns a vector of [CapStones](struct.CapStone.html)
-pub fn capstones_from_image<S>(img: &mut SearchableImage<S>) -> Vec<CapStone> where S: SearchableImageBuffer {
+pub fn capstones_from_image<S>(img: &mut PreparedImage<S>) -> Vec<CapStone> where S: ImageBuffer {
     let mut res = Vec::new();
 
     for y in 0..img.height() {
@@ -166,7 +166,7 @@ impl CapStoneFinder {
 /// * The ratio between the size of `stone` position and the outer `ring` position is roughly 37.5%
 ///
 /// Returns `true` if all of the above are true, `false` otherwise
-fn is_capstone<S>(img: &mut SearchableImage<S>, linepos: &LinePosition, y: usize) -> bool where S: SearchableImageBuffer {
+fn is_capstone<S>(img: &mut PreparedImage<S>, linepos: &LinePosition, y: usize) -> bool where S: ImageBuffer {
     let ring_reg = img.get_region((linepos.right, y));
     let stone_reg = img.get_region((linepos.stone, y));
 
@@ -176,12 +176,12 @@ fn is_capstone<S>(img: &mut SearchableImage<S>, linepos: &LinePosition, y: usize
 
     match (ring_reg, stone_reg) {
         (
-            Region::Unclaimed {
+            ColoredRegion::Unclaimed {
                 color: ring_color,
                 pixel_count: ring_count,
                 ..
             },
-            Region::Unclaimed {
+            ColoredRegion::Unclaimed {
                 color: stone_color,
                 pixel_count: stone_count,
                 ..
@@ -205,10 +205,10 @@ fn is_capstone<S>(img: &mut SearchableImage<S>, linepos: &LinePosition, y: usize
 ///
 /// Returns the `CapStone` at the given position
 fn create_capstone<S>(
-    img: &mut SearchableImage<S>,
+    img: &mut PreparedImage<S>,
     linepos: &LinePosition,
     y: usize,
-) -> CapStone  where S: SearchableImageBuffer {
+) -> CapStone  where S: ImageBuffer {
     /* Find the corners of the ring */
     let start_point = Point { x: linepos.right as i32, y: y as i32 };
     let first_corner_finder = FirstCornerFinder::new(start_point);
@@ -354,7 +354,7 @@ impl AreaFiller for AllCornerFinder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::identify::image::BasicImageBuffer;
+    use crate::prepare::BasicImageBuffer;
 
     #[test]
     fn test_capstone_finder_small() {
@@ -447,8 +447,8 @@ mod tests {
         }), finder.advance(PixelColor::from(*line.next().unwrap())));
     }
 
-    fn img_from_array(array: [[u8; 3]; 3]) -> SearchableImage<BasicImageBuffer> {
-        SearchableImage::from_bitmap(3, 3, |x, y| {
+    fn img_from_array(array: [[u8; 3]; 3]) -> PreparedImage<BasicImageBuffer> {
+        crate::PreparedImage::prepare_from_bitmap(3, 3, |x, y| {
             array[y][x] == 1
         })
     }

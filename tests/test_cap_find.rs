@@ -6,7 +6,7 @@ fn load_and_find(img: &[u8]) -> Vec<rqrr::CapStone> {
     let img = image::load_from_memory(img).unwrap().to_luma();
     let w = img.width() as usize;
     let h = img.height() as usize;
-    let mut img = rqrr::SearchableImage::from_greyscale(w, h, |x, y| {
+    let mut img = rqrr::PreparedImage::prepare_from_greyscale(w, h, |x, y| {
         img.get_pixel(x as u32, y as u32).data[0]
     });
     rqrr::capstones_from_image(&mut img)
