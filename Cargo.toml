@@ -1,7 +1,7 @@
 [package]
 name = "rqrr"
 edition = "2018"
-version = "0.1.2-pre"
+version = "0.1.2-beta.1"
 authors = ["WanzenBug <moritz@wanzenbug.xyz>"]
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/rqrr/"
