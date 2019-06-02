@@ -1,9 +1,6 @@
 use crate::{
-    identify::{
-        Point,
-
-        helper::Perspective,
-    },
+    identify::Point,
+    geometry::Perspective,
     prepare::{ColoredRegion, PreparedImage, Row},
 };
 use crate::prepare::{AreaFiller, ImageBuffer, PixelColor};
@@ -44,7 +41,7 @@ pub fn capstones_from_image<S>(img: &mut PreparedImage<S>) -> Vec<CapStone> wher
     let mut res = Vec::new();
 
     for y in 0..img.height() {
-        let mut finder = CapStoneFinder::new(img.get_pixel_at(0, y));
+        let mut finder = LineScanner::new(img.get_pixel_at(0, y));
         for x in 1..img.width() {
             if let Some(linepos) = finder.advance(img.get_pixel_at(x, y)) {
                 if is_capstone(img, &linepos, y) {
@@ -82,7 +79,7 @@ struct LinePosition {
 /// This struct is meant to operate on a single line, with the first value in the line given to
 /// `CapStoneFinder::new` and any following values given to `CapStoneFinder::advance`
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-struct CapStoneFinder {
+struct LineScanner {
     lookbehind_buf: [usize; 5],
     last_color: PixelColor,
     run_length: usize,
@@ -90,10 +87,10 @@ struct CapStoneFinder {
     current_position: usize,
 }
 
-impl CapStoneFinder {
+impl LineScanner {
     /// Initialize a new CapStoneFinder with the value of the first pixel in a line
     fn new(initial_col: PixelColor) -> Self {
-        CapStoneFinder {
+        LineScanner {
             lookbehind_buf: [0; 5],
             last_color: initial_col,
             run_length: 1,
@@ -360,7 +357,7 @@ mod tests {
     fn test_capstone_finder_small() {
         let mut line = [1, 0, 1, 1, 1, 0, 1, 0].iter();
 
-        let mut finder = CapStoneFinder::new(PixelColor::White);
+        let mut finder = LineScanner::new(PixelColor::White);
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
@@ -379,7 +376,7 @@ mod tests {
     fn test_capstone_finder_start() {
         let mut line = [0, 1, 1, 1, 0, 1, 0].iter();
 
-        let mut finder = CapStoneFinder::new(PixelColor::Black);
+        let mut finder = LineScanner::new(PixelColor::Black);
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
@@ -397,7 +394,7 @@ mod tests {
     fn test_capstone_finder_multiple() {
         let mut line = [0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0].iter();
 
-        let mut finder = CapStoneFinder::new(PixelColor::Black);
+        let mut finder = LineScanner::new(PixelColor::Black);
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
@@ -425,7 +422,7 @@ mod tests {
     fn test_capstone_finder_variance() {
         let mut line = [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0].iter();
 
-        let mut finder = CapStoneFinder::new(PixelColor::White);
+        let mut finder = LineScanner::new(PixelColor::White);
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
         assert_eq!(None, finder.advance(PixelColor::from(*line.next().unwrap())));
@@ -508,4 +505,40 @@ mod tests {
             y: 0,
         }, corners[3]);
     }
+
+    fn load_and_find(img: &[u8]) -> Vec<CapStone> {
+        let img = image::load_from_memory(img).unwrap().to_luma();
+        let w = img.width() as usize;
+        let h = img.height() as usize;
+        let mut img = crate::PreparedImage::prepare_from_greyscale(w, h, |x, y| {
+            img.get_pixel(x as u32, y as u32).data[0]
+        });
+        crate::capstones_from_image(&mut img)
+    }
+
+
+    #[test]
+    fn test_cap() {
+        let caps = load_and_find(include_bytes!("test_data/cap.png"));
+        assert_eq!(1, caps.len());
+    }
+
+    #[test]
+    fn test_cap_connected() {
+        let caps = load_and_find(include_bytes!("test_data/cap_connect.png"));
+        assert_eq!(0, caps.len());
+    }
+
+    #[test]
+    fn test_cap_disconnected() {
+        let caps = load_and_find(include_bytes!("test_data/cap_disconnect.png"));
+        assert_eq!(0, caps.len());
+    }
+
+    #[test]
+    fn test_cap_size() {
+        let caps = load_and_find(include_bytes!("test_data/cap_size.png"));
+        assert_eq!(0, caps.len());
+    }
+
 }

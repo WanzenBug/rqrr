@@ -205,6 +205,30 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
         }
     }
 
+    pub fn detect_grids(&mut self) -> Vec<crate::Grid<crate::identify::grid::RefGridImage<S>>> {
+        let mut res = Vec::new();
+        let stones = crate::capstones_from_image(self);
+        let groups = crate::identify::find_groupings(stones);
+        let locations: Vec<_> = groups.into_iter()
+            .filter_map(|v| crate::SkewedGridLocation::from_group(self, v))
+            .collect();
+        for grid_location in locations {
+            let bounds =  [
+                grid_location.c.map(0.0, 0.0),
+                grid_location.c.map(grid_location.grid_size as f64 + 1.0, 0.0),
+                grid_location.c.map(grid_location.grid_size as f64 + 1.0, grid_location.grid_size as f64 + 1.0),
+                grid_location.c.map(0.0, grid_location.grid_size as f64 + 1.0),
+            ];
+            let grid = grid_location.into_grid_image(self);
+            res.push(crate::Grid {
+                grid,
+                bounds,
+            });
+        }
+
+        res
+    }
+
     pub fn without_preparation(buf: S) -> Self {
         for y in 0..buf.height() {
             for x in 0..buf.width() {

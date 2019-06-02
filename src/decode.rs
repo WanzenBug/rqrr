@@ -3,7 +3,7 @@ use std::mem;
 
 use g2p::{g2p, GaloisField};
 
-use crate::{DeQRError, DeQRResult, Grid};
+use crate::{DeQRError, DeQRResult, BitGrid};
 use crate::version_db::{RSParameters, VERSION_DATA_BASE};
 
 g2p!(GF16, 4, modulus: 0b1_0011);
@@ -117,7 +117,7 @@ pub struct DataStream {
 /// This tries to read the bit patterns from a [Grid](trait.Grid.html), correct errors
 /// and/or missing bits and write the result to the output. If successful also returns
 /// [MetaData](struct.MetaData.html) of the read grid.
-pub fn decode<W>(code: &Grid, writer: W) -> DeQRResult<MetaData> where W: Write {
+pub fn decode<W>(code: &BitGrid, writer: W) -> DeQRResult<MetaData> where W: Write {
     let meta = read_format(code)?;
     let raw = read_data(code, &meta);
     let stream = codestream_ecc(&meta, raw)?;
@@ -545,7 +545,7 @@ fn poly_add<G>(
 }
 
 fn read_data(
-    code: &Grid,
+    code: &BitGrid,
     meta: &MetaData,
 ) -> RawData {
     let mut ds = RawData::new();
@@ -586,7 +586,7 @@ fn read_data(
 }
 
 fn read_bit(
-    code: &Grid,
+    code: &BitGrid,
     meta: &MetaData,
     y: usize,
     x: usize,
@@ -708,7 +708,7 @@ fn correct_format(mut word: u16) -> DeQRResult<u16> {
     Ok(word)
 }
 
-fn read_format(code: &Grid) -> DeQRResult<MetaData> {
+fn read_format(code: &BitGrid) -> DeQRResult<MetaData> {
     let mut format = 0;
 
     // Try first location

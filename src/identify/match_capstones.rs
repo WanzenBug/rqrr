@@ -1,4 +1,4 @@
-use super::CapStone;
+use crate::CapStone;
 
 #[derive(Debug, Clone)]
 pub struct CapStoneGroup(

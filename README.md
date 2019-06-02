@@ -12,10 +12,16 @@ The most basic usage is shown below:
 use image;
 use rqrr;
 
-let img = image::open("tests/data/github.gif").unwrap();
-let codes = rqrr::find_and_decode_from_image(&img);
-assert_eq!(codes.len(), 1);
-assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
+let img = image::open("tests/data/github.gif")?.to_luma();
+// Prepare for detection
+let mut img = rqrr::PreparedImage::prepare(img);
+// Search for grids, without decoding
+let grids = img.detect_grids();
+assert_eq!(grids.len(), 1);
+// Decode the grid
+let (meta, content) = grids[0].decode()?;
+assert_eq!(meta.ecc_level, 0);
+assert_eq!(content, "https://github.com/WanzenBug/rqrr");
 ```
 For more information visit [docs.rs](https://docs.rs/rqrr/)
 

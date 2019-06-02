@@ -9,41 +9,101 @@
 //!
 //! ```rust
 //! use image;
-//! use rqrr;
 //!
-//! let img = image::open("tests/data/github.gif").unwrap();
-//! let codes = rqrr::find_and_decode_from_image(&img);
-//! assert_eq!(codes.len(), 1);
-//! assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
+//! # fn main() -> Result<(), Box<::std::error::Error>> {
+//! // Load on image to search, convert it to grayscale
+//! let img = image::open("tests/data/github.gif")?.to_luma();
+//! // Prepare for detection
+//! let mut img = rqrr::PreparedImage::prepare(img);
+//! // Search for grids, without decoding
+//! let grids = img.detect_grids();
+//! assert_eq!(grids.len(), 1);
+//! // Decode the grid
+//! let (meta, content) = grids[0].decode()?;
+//! assert_eq!(meta.ecc_level, 0);
+//! assert_eq!(content, "https://github.com/WanzenBug/rqrr");
+//! # Ok(())
+//! # }
 //! ```
 //!
-//! If you have some other form of picture storage, you can use [`find_and_decode_from_func`]().
+//! If you have some other form of picture storage, you can use [`PreparedImage::prepare_from_*`](struct.PreparedImage.html).
 //! This allows you define your own source for images.
 
 #[cfg(feature = "img")]
 use image;
 
-pub use self::decode::{decode, MetaData, Version};
-pub use self::identify::{CapStone, capstones_from_image, find_groupings, Point,  SkewedGridLocation};
+pub use self::decode::{MetaData, Version};
+pub(crate) use self::detect::{CapStone, capstones_from_image};
+pub(crate) use self::identify::SkewedGridLocation;
+pub use self::identify::Point;
 pub use self::prepare::{PreparedImage};
+use std::io::Write;
+use std::error::Error;
 
 mod decode;
 mod identify;
 mod version_db;
 mod prepare;
+mod detect;
+pub(crate) mod geometry;
 
 
+/// Wrapper around any grid that can be interpreted as a QR code
+#[derive(Debug, Clone)]
+pub struct Grid<G> {
+    /// The backing binary square
+    pub grid: G,
+    /// The bounds of the square, in underlying coordinates.
+    ///
+    /// If this grid references for example an underlying image, these values will be set to
+    /// coordinates in that image.
+    pub bounds: [Point; 4],
+}
+
+impl<G> Grid<G> where G: BitGrid {
+    /// Create a new grid from a BitGrid.
+    ///
+    /// This just initialises the bounds to 0.
+    pub fn new(grid: G) -> Self {
+        Grid {
+            grid,
+            bounds: [
+                Point { x: 0, y: 0 },
+                Point { x: 0, y: 0 },
+                Point { x: 0, y: 0 },
+                Point { x: 0, y: 0 },
+            ]
+        }
+    }
+
+    /// Try to decode the grid.
+    ///
+    /// If successful returns the decoded string as well as metadata about the code.
+    pub fn decode(&self) -> DeQRResult<(MetaData, String)> {
+        let mut out = Vec::new();
+        let meta = self.decode_to(&mut out)?;
+        let out = String::from_utf8(out)?;
+        Ok((meta, out))
+    }
+
+    /// Try to decode the grid.
+    ///
+    /// Instead of returning a String, this methode writes the decoded result to the given writer
+    ///
+    /// **Warning**: This may lead to half decoded content to be written to the writer.
+    pub fn decode_to<W>(&self, writer: W) -> DeQRResult<MetaData> where W: Write {
+        crate::decode::decode(&self.grid, writer)
+    }
+}
 
 /// A grid that contains exactly one QR code square.
 ///
 /// The common trait for everything that can be decoded as a QR code. Given a normal image, we first
-/// need to find the QR grids in it. See [capstones_from_image](fn.find_capstones_from_image.html),
-/// [find_groupings](fn.find_groupings.html) and
-/// [SkewedGridLocation](struct.SkewedGridLocation.html).
+/// need to find the QR grids in it.
 ///
 /// This trait can be implemented when some object is known to be exactly the bit-pattern
 /// of a QR code.
-pub trait Grid {
+pub trait BitGrid {
     /// Return the size of the grid.
     ///
     /// Since QR codes are always squares, the grid is assumed to be size * size.
@@ -75,8 +135,7 @@ pub trait Grid {
 /// # Example
 ///
 /// ```rust
-/// use rqrr;
-///
+/// # fn main() -> Result<(), rqrr::DeQRError> {
 /// let grid = [
 ///     [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
 ///     [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
@@ -101,12 +160,14 @@ pub trait Grid {
 ///     [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, ],
 /// ];
 ///
-/// let img = rqrr::SimpleGrid::from_func(21, |x, y| {
+/// let simple = rqrr::SimpleGrid::from_func(21, |x, y| {
 ///     grid[y][x] == 1
 /// });
-/// let mut result = Vec::new();
-/// rqrr::decode(&img, &mut result).unwrap();
-/// assert_eq!(b"rqrr".as_ref(), &result[..])
+/// let grid = rqrr::Grid::new(simple);
+/// let (_meta, content) = grid.decode()?;
+/// assert_eq!(content, "rqrr");
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug, Clone)]
 pub struct SimpleGrid {
@@ -135,7 +196,7 @@ impl SimpleGrid {
 }
 
 
-impl Grid for SimpleGrid {
+impl BitGrid for SimpleGrid {
     fn size(&self) -> usize {
         self.size
     }
@@ -144,114 +205,6 @@ impl Grid for SimpleGrid {
         let c = y * self.size + x;
         self.cell_bitmap[c >> 3] & (1 << (c & 7) as u8) != 0
     }
-}
-
-
-/// The decoded content of a QR-Code
-///
-/// The member `val` stores the decoded value of a QR-Code.
-/// The member `meta` stores [MetaData](struct.MetaData.html) (Version number, ECC-Level, etc)
-/// The member `position` stores the 4 'corners' of the QR code, in image coordinates.
-#[derive(Debug)]
-pub struct Code {
-    pub meta: MetaData,
-    pub val: String,
-    pub position: [Point; 4],
-}
-
-
-/// Given a image object, locate all codes found in it
-///
-/// This is a convenient wrapper if you use the `image` crate already. The only requirement
-/// for the image is that the 'black' parts of a QR code are 'dark', 'white' parts 'bright'.
-///
-/// # Example
-/// ```rust
-/// use image;
-/// use rqrr;
-///
-/// let img = image::open("tests/data/github.gif").unwrap();
-/// let codes = rqrr::find_and_decode_from_image(&img);
-/// assert_eq!(codes.len(), 1);
-/// assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
-/// ```
-#[cfg(feature = "img")]
-pub fn find_and_decode_from_image(img: &image::DynamicImage) -> Vec<Code> {
-    let img = img.to_luma();
-    let w = img.width() as usize;
-    let h = img.height() as usize;
-
-    find_and_decode_from_func(w, h, |x, y| {
-        img.get_pixel(x as u32, y as u32).data[0]
-    })
-}
-
-/// Find QR-Codes and decode them
-///
-/// This method expects to be given an image of dimension `width` * `height`. The data is supplied
-/// via the `fill` function. The fill function will be called width coordinates `x, y`, where `x`
-/// ranges from 0 to `width` and `y` from 0 to `height`. The return value is expected to correspond
-/// with the greyscale value of the image to decode, 0 being black, 255 being white.
-///
-/// # Returns
-///
-/// Returns a collection of all QR-Codes that have been found. They are already decoded and contain
-/// some extra metadata like position in the image as well as information about the used QR code
-/// itself
-///
-/// # Panics
-///
-/// Panics if `width * height` would overflow.
-///
-/// # Examples
-///
-/// ```
-/// use image;
-/// use rqrr;
-///
-/// let img = image::open("tests/data/github.gif").unwrap().to_luma();
-/// let w = img.width() as usize;
-/// let h = img.height() as usize;
-/// let codes = rqrr::find_and_decode_from_func(w, h, |x, y|  img.get_pixel(x as u32, y as u32).data[0]);
-/// assert_eq!(codes.len(), 1);
-/// assert_eq!(codes[0].val, "https://github.com/WanzenBug/rqrr");
-/// ```
-pub fn find_and_decode_from_func<F>(width: usize, height: usize, fill: F) -> Vec<Code> where F: FnMut(usize, usize) -> u8 {
-    let mut img = PreparedImage::prepare_from_greyscale(width, height, fill);
-    let caps = capstones_from_image(&mut img);
-    let groups = find_groupings(caps);
-    let grids: Vec<_> = groups.into_iter()
-        .filter_map(|group| SkewedGridLocation::from_group(&mut img, group))
-        .collect();
-    let mut ret = Vec::new();
-    for grid in grids {
-        let mut decode_val = Vec::new();
-        let position = [
-            grid.c.map(0.0, 0.0),
-            grid.c.map(grid.grid_size as f64 + 1.0, 0.0),
-            grid.c.map(grid.grid_size as f64 + 1.0, grid.grid_size as f64 + 1.0),
-            grid.c.map(0.0, grid.grid_size as f64 + 1.0),
-        ];
-
-        let grid_img = grid.into_grid_image(&img);
-        let meta = match decode::decode(&grid_img, &mut decode_val) {
-            Ok(x) => x,
-            Err(_) => continue,
-        };
-
-        let val = match String::from_utf8(decode_val) {
-            Ok(x) => x,
-            Err(_) => continue,
-        };
-
-        ret.push(Code {
-            meta,
-            val,
-            position,
-        })
-    }
-
-    ret
 }
 
 /// Possible errors that can happen during decoding
@@ -273,6 +226,192 @@ pub enum DeQRError {
     InvalidVersion,
     /// Unsupported / non-existent grid size read
     InvalidGridSize,
+    /// Output was not encoded in expected UTF8
+    EncodingError,
 }
 
-pub type DeQRResult<T> = Result<T, DeQRError>;
+type DeQRResult<T> = Result<T, DeQRError>;
+
+impl Error for DeQRError {}
+
+impl From<::std::string::FromUtf8Error> for DeQRError {
+    fn from(_: ::std::string::FromUtf8Error) -> Self {
+        DeQRError::EncodingError
+    }
+}
+
+impl ::std::fmt::Display for DeQRError {
+    fn fmt<'a>(&self, f: &mut std::fmt::Formatter<'a>) -> std::fmt::Result {
+        let msg = match self {
+            DeQRError::IoError => "IoError(Could not write to output)",
+            DeQRError::DataUnderflow => "DataUnderflow(Expected more bits to decode)",
+            DeQRError::DataOverflow => "DataOverflow(Expected less bits to decode)",
+            DeQRError::UnknownDataType => "UnknownDataType(DataType not known or not implemented)",
+            DeQRError::DataEcc => "Ecc(Too many errors to correct)",
+            DeQRError::FormatEcc => "Ecc(Version information corrupt)",
+            DeQRError::InvalidVersion => "InvalidVersion(Invalid version or corrupt)",
+            DeQRError::InvalidGridSize => "InvalidGridSize(Invalid version or corrupt)",
+            DeQRError::EncodingError => "Encoding(Not UTF8)",
+        };
+        write!(f, "{}", msg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rqrr() {
+        let grid = [
+            [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, ],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+            [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, ],
+            [1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, ],
+            [0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, ],
+            [1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, ],
+            [0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, ],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, ],
+            [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, ],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, ],
+        ];
+
+        let img = crate::SimpleGrid::from_func(21, |x, y| {
+            grid[y][x] == 1
+        });
+
+        let mut buf = vec![0; img.size() * img.size() / 8 + 1];
+        for y in 0..img.size() {
+            for x in 0..img.size() {
+                let i = y * img.size() + x;
+                if img.bit(y, x) {
+                    buf[i >> 3] |= 1 << ((i & 7) as u8);
+                }
+            }
+        }
+
+        let mut vec = Vec::new();
+        crate::decode::decode(&img, &mut vec).unwrap();
+
+        assert_eq!(b"rqrr".as_ref(), &vec[..])
+    }
+
+    #[test]
+    fn test_github() {
+        let grid = [
+            [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, ],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, ],
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, ],
+            [1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, ],
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, ],
+            [1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, ],
+            [1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, ],
+            [0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, ],
+            [0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, ],
+            [1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, ],
+            [1, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, ],
+            [1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, ],
+            [0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, ],
+            [1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, ],
+            [0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, ],
+            [1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, ],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, ],
+            [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, ],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, ],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, ],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, ],
+        ];
+
+        let img = crate::SimpleGrid::from_func(29, |x, y| {
+            grid[y][x] == 1
+        });
+
+        let mut buf = vec![0; img.size() * img.size() / 8 + 1];
+        for y in 0..img.size() {
+            for x in 0..img.size() {
+                let i = y * img.size() + x;
+                if img.bit(y, x) {
+                    buf[i >> 3] |= 1 << ((i & 7) as u8);
+                }
+            }
+        }
+
+        let mut vec = Vec::new();
+        crate::decode::decode(&img, &mut vec).unwrap();
+
+        assert_eq!(b"https://github.com/WanzenBug/rqrr".as_ref(), &vec[..])
+    }
+
+    #[test]
+    fn test_number() {
+        let grid = [
+            [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1],
+            [0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0],
+            [0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0],
+            [0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1],
+            [0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0],
+            [1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1],
+            [0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0],
+            [1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1],
+            [1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0],
+            [1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0],
+            [1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0],
+            [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0],
+            [1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 0],
+            [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]
+        ];
+
+        let img = crate::SimpleGrid::from_func(29, |x, y| {
+            grid[y][x] == 1
+        });
+
+        let mut buf = vec![0; img.size() * img.size() / 8 + 1];
+        for y in 0..img.size() {
+            for x in 0..img.size() {
+                let i = y * img.size() + x;
+                if img.bit(y, x) {
+                    buf[i >> 3] |= 1 << ((i & 7) as u8);
+                }
+            }
+        }
+
+        let mut vec = Vec::new();
+        crate::decode::decode(&img, &mut vec).unwrap();
+
+        assert_eq!(b"1234567891011121314151617181920".as_ref(), &vec[..])
+    }
+}

@@ -5,9 +5,9 @@ use std::{
 
 use crate::{
     CapStone,
-    Grid,
+    BitGrid,
+    geometry,
     identify::{
-        helper,
         match_capstones::CapStoneGroup,
     },
     Point,
@@ -32,7 +32,7 @@ pub struct SkewedGridLocation {
     pub caps: [CapStone; 3],
     pub align: Point,
     pub grid_size: usize,
-    pub c: helper::Perspective,
+    pub c: geometry::Perspective,
 }
 
 impl SkewedGridLocation {
@@ -80,7 +80,7 @@ impl SkewedGridLocation {
          * lines from capstones A and C.
          */
 
-        let mut align = helper::line_intersect(
+        let mut align = geometry::line_intersect(
             &group.0.corners[0],
             &group.0.corners[1],
             &group.2.corners[0],
@@ -130,7 +130,7 @@ pub struct RefGridImage<'a, S> {
     img: &'a PreparedImage<S>,
 }
 
-impl<'a, S> Grid for RefGridImage<'a, S> where S: ImageBuffer {
+impl<'a, S> BitGrid for RefGridImage<'a, S> where S: ImageBuffer {
     fn size(&self) -> usize {
         self.grid.grid_size
     }
@@ -141,8 +141,8 @@ impl<'a, S> Grid for RefGridImage<'a, S> where S: ImageBuffer {
     }
 }
 
-fn setup_perspective<S>(img: &PreparedImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> helper::Perspective where S: ImageBuffer {
-    let inital = helper::Perspective::create(&[
+fn setup_perspective<S>(img: &PreparedImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> geometry::Perspective where S: ImageBuffer {
+    let inital = geometry::Perspective::create(&[
         caps.1.corners[0],
         caps.2.corners[0],
         align,
@@ -165,7 +165,7 @@ fn rotate_capstone(
 
     /* Rotate the capstone */
     cap.corners.rotate_left(best_idx);
-    cap.c = helper::Perspective::create(&cap.corners, 7.0, 7.0);
+    cap.c = geometry::Perspective::create(&cap.corners, 7.0, 7.0);
 }
 
 //* Try the measure the timing pattern for a given QR code. This does
@@ -206,7 +206,7 @@ fn timing_scan<S>(
 ) -> usize where S: ImageBuffer {
     let mut run_length = 0;
     let mut count = 0;
-    for p in helper::BresenhamScan::new(p0, p1) {
+    for p in geometry::BresenhamScan::new(p0, p1) {
         let pixel = img.get_pixel_at_point(p);
         if PixelColor::White != pixel {
             if run_length >= 2 {
@@ -300,7 +300,7 @@ impl AreaFiller for LeftMostFinder {
 }
 
 
-fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: helper::Perspective, grid_size: usize) -> helper::Perspective where S: ImageBuffer {
+fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Perspective, grid_size: usize) -> geometry::Perspective where S: ImageBuffer {
     let mut best = fitness_all(img, &perspective, grid_size);
     let mut adjustments: [f64; 8] = [
         perspective.0[0] * 0.02f64,
@@ -344,7 +344,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: helper::Perspe
  * transform, using the features we expect to find by scanning the
  * grid.
  */
-fn fitness_all<S>(img: &PreparedImage<S>, perspective: &helper::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
+fn fitness_all<S>(img: &PreparedImage<S>, perspective: &geometry::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
     let version = (grid_size - 17) / 4;
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
@@ -380,7 +380,7 @@ fn fitness_all<S>(img: &PreparedImage<S>, perspective: &helper::Perspective, gri
 
 fn fitness_apat<S>(
     img: &PreparedImage<S>,
-    perspective: &helper::Perspective,
+    perspective: &geometry::Perspective,
     cx: i32,
     cy: i32,
 ) -> i32 where S: ImageBuffer {
@@ -391,7 +391,7 @@ fn fitness_apat<S>(
 
 fn fitness_ring<S>(
     img: &PreparedImage<S>,
-    perspective: &helper::Perspective,
+    perspective: &geometry::Perspective,
     cx: i32,
     cy: i32,
     radius: i32,
@@ -408,7 +408,7 @@ fn fitness_ring<S>(
 
 fn fitness_cell<S>(
     img: &PreparedImage<S>,
-    perspective: &helper::Perspective,
+    perspective: &geometry::Perspective,
     x: i32,
     y: i32,
 ) -> i32 where S: ImageBuffer {
@@ -432,7 +432,7 @@ fn fitness_cell<S>(
 
 fn fitness_capstone<S>(
     img: &PreparedImage<S>,
-    perspective: &helper::Perspective,
+    perspective: &geometry::Perspective,
     x: i32,
     y: i32,
 ) -> i32 where S: ImageBuffer {

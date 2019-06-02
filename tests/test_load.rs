@@ -1,28 +1,21 @@
 use image;
 
-use rqrr;
-use rqrr::{capstones_from_image, find_groupings, Grid, SkewedGridLocation};
+use rqrr::{PreparedImage, BitGrid};
 
-fn test_data(buffer: &[u8]) -> (rqrr::PreparedImage<image::GrayImage>, Vec<rqrr::SkewedGridLocation>) {
-    let img = image::load_from_memory(buffer).unwrap();
-    let mut bitimg = rqrr::PreparedImage::prepare(img.to_luma());
-    let caps = capstones_from_image(&mut bitimg);
-    let groups = find_groupings(caps);
-    let grids: Vec<_> = groups.into_iter()
-        .filter_map(|group| SkewedGridLocation::from_group(&mut bitimg, group))
-        .collect();
-    (bitimg, grids)
+fn test_data(buffer: &[u8]) -> PreparedImage<image::GrayImage> {
+    let img = image::load_from_memory(buffer).unwrap().to_luma();
+    let bitimg = PreparedImage::prepare(img);
+    bitimg
 }
 
 #[test]
 fn test_small_rqrr() {
     let buffer = include_bytes!("data/rqrr.gif");
-    let (img, mut grids) = test_data(buffer);
-
+    let mut img = test_data(buffer);
+    let mut grids = img.detect_grids();
     assert_eq!(1, grids.len());
     let c = grids.pop().unwrap();
-    let grid = c.into_grid_image(&img);
-    assert_eq!(21, grid.size());
+    assert_eq!(21, c.grid.size());
     let cmp = [
         [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
         [1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, ],
@@ -47,9 +40,9 @@ fn test_small_rqrr() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, ],
     ];
 
-    for x in 0..grid.size() {
-        for y in 0..grid.size() {
-            assert_eq!(cmp[y][x] == 1, grid.bit(y, x))
+    for x in 0..c.grid.size() {
+        for y in 0..c.grid.size() {
+            assert_eq!(cmp[y][x] == 1, c.grid.bit(y, x))
         }
     }
 }
@@ -57,12 +50,12 @@ fn test_small_rqrr() {
 #[test]
 fn test_small_github() {
     let buffer = include_bytes!("data/github.gif");
-    let (img, mut grids) = test_data(buffer);
+    let mut img = test_data(buffer);
+    let mut grids = img.detect_grids();
 
     assert_eq!(1, grids.len());
     let c = grids.pop().unwrap();
-    let grid = c.into_grid_image(&img);
-    assert_eq!(29, grid.size());
+    assert_eq!(29, c.grid.size());
 
     let cmp = [
         [1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, ],
@@ -96,9 +89,9 @@ fn test_small_github() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, ],
     ];
 
-    for x in 0..grid.size() {
-        for y in 0..grid.size() {
-            assert_eq!(cmp[y][x] == 1, grid.bit(y, x))
+    for x in 0..c.grid.size() {
+        for y in 0..c.grid.size() {
+            assert_eq!(cmp[y][x] == 1, c.grid.bit(y, x))
         }
     }
 }
@@ -106,12 +99,12 @@ fn test_small_github() {
 #[test]
 fn test_small_number() {
     let buffer = include_bytes!("data/number.gif");
-    let (img, mut grids) = test_data(buffer);
+    let mut img = test_data(buffer);
+    let mut grids = img.detect_grids();
 
     assert_eq!(1, grids.len());
     let c = grids.pop().unwrap();
-    let grid = c.into_grid_image(&img);
-    assert_eq!(29, grid.size());
+    assert_eq!(29, c.grid.size());
     let cmp = [
         [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1],
         [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
@@ -144,9 +137,9 @@ fn test_small_number() {
         [1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]
     ];
 
-    for x in 0..grid.size() {
-        for y in 0..grid.size() {
-            assert_eq!(cmp[y][x] == 1, grid.bit(y, x))
+    for x in 0..c.grid.size() {
+        for y in 0..c.grid.size() {
+            assert_eq!(cmp[y][x] == 1, c.grid.bit(y, x))
         }
     }
 }
