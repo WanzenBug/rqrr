@@ -22,8 +22,8 @@ img = ["image"]
 default = ["img"]
 
 [[bench]]
-name = "bench_cap_find"
-path = "benches/bench_cap_find.rs"
+name = "bench_prepare"
+path = "benches/bench_prepare.rs"
 required-features = ["img"]
 harness = false
 
