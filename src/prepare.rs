@@ -1,5 +1,3 @@
-use std::cmp;
-
 use crate::identify::Point;
 use lru::LruCache;
 
@@ -164,33 +162,47 @@ impl AreaFiller for AreaCounter {
 
 impl<S> PreparedImage<S> where S: ImageBuffer {
     pub fn prepare(mut buf: S) -> Self {
+        // https://en.wikipedia.org/wiki/Otsu%27s_method
         let w = buf.width();
         let h = buf.height();
-        let mut row_average = vec![0; w];
-        let mut avg_v = 0;
-        let mut avg_u = 0;
+        let mut histogram = [0usize; 256];
+        for y in 0..h {
+            for x in 0..w {
+                histogram[buf.get_pixel(x, y) as usize] += 1;
+            }
+        }
+        let w_sum = histogram.iter().enumerate()
+            .fold(0, |a, (i, &v)| a + i * v);
 
-        let threshold_s = cmp::max(w / 8, 1);
+        let mut q1 = 0;
+        let mut sum_b = 0;
+        let mut var_max = 0;
+        let mut threshold = 0;
+        for (i, &hist) in histogram.iter().enumerate() {
+            q1 += hist;
+            if q1 == 0 {
+                continue;
+            }
+
+            let q2 = w * h  - q1;
+            if q2 == 0 {
+                break;
+            }
+
+            sum_b += i * hist;
+            let m1 = sum_b as f64 / q1 as f64;
+            let m2 = (w_sum - sum_b) as f64 / q2 as f64;
+            let m1m2 = m1 - m2;
+            let variance = (m1m2 * m1m2) as usize * q1  * q2;
+            if variance > var_max {
+                threshold = i;
+                var_max = variance;
+            }
+        }
 
         for y in 0..h {
-            for r in &mut row_average {
-                *r = 0;
-            }
-
             for x in 0..w {
-                let (v, u) = if y % 2 == 0 {
-                    (w - 1 - x, x)
-                } else {
-                    (x, w - 1 - x)
-                };
-                avg_v = avg_v * (threshold_s - 1) / threshold_s + buf.get_pixel(v, y) as usize;
-                avg_u = avg_u * (threshold_s - 1) / threshold_s + buf.get_pixel(u, y) as usize;
-                row_average[v] += avg_v;
-                row_average[u] += avg_u;
-            }
-
-            for x in 0..w {
-                let fill = if (buf.get_pixel(x, y) as usize) < row_average[x] * (100 - 5) / (200 * threshold_s) {
+                let fill = if (buf.get_pixel(x, y) as usize) <= threshold {
                     PixelColor::Black
                 } else {
                     PixelColor::White
