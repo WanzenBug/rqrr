@@ -208,7 +208,7 @@ impl BitGrid for SimpleGrid {
 }
 
 /// Possible errors that can happen during decoding
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum DeQRError {
     /// Could not write the output to the output stream/string
     IoError,
