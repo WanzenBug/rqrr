@@ -22,3 +22,16 @@ fn test_full_time() {
     ref_set.insert("1234567891011121314151617181920".to_string());
     assert_eq!(codes, ref_set);
 }
+
+#[test]
+fn test_full_large_version() {
+    let gif = image::open("tests/data/full/superlong.gif").unwrap().to_luma();
+
+    let mut search_img = rqrr::PreparedImage::prepare(gif);
+    let grids = search_img.detect_grids();
+    assert_eq!(grids.len(), 1);
+
+    let (meta, content) = grids[0].decode().unwrap();
+    assert_eq!(meta.version, rqrr::Version(14));
+    assert_eq!(content, "superlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdatasuperlongdata");
+}

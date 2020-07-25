@@ -12,14 +12,16 @@ g2p!(GF256, 8, modulus: 0b1_0001_1101);
 const MAX_PAYLOAD_SIZE: usize = 8896;
 
 /// Version of a QR Code which determines its size
-#[derive(Debug, Clone, Copy)]
-pub struct Version(usize);
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct Version(pub usize);
 
 impl Version {
     /// Given the grid size, determine the likely grid size
     pub fn from_size(b: usize) -> DeQRResult<Self> {
-        if b > 0 && b <= 40 {
-            Ok(Version((b - 17) / 4))
+        let computed_version = b.saturating_sub(17) / 4;
+
+        if computed_version > 0 && computed_version <= 40 {
+            Ok(Version(computed_version))
         } else {
             Err(DeQRError::InvalidVersion)
         }
