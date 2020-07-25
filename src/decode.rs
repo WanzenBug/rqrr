@@ -119,7 +119,7 @@ pub struct DataStream {
 /// This tries to read the bit patterns from a [Grid](trait.Grid.html), correct errors
 /// and/or missing bits and write the result to the output. If successful also returns
 /// [MetaData](struct.MetaData.html) of the read grid.
-pub fn decode<W>(code: &BitGrid, writer: W) -> DeQRResult<MetaData> where W: Write {
+pub fn decode<W>(code: &dyn BitGrid, writer: W) -> DeQRResult<MetaData> where W: Write {
     let meta = read_format(code)?;
     let raw = read_data(code, &meta);
     let stream = codestream_ecc(&meta, raw)?;
@@ -182,8 +182,8 @@ fn decode_kanji<W>(
     mut writer: W,
 ) -> DeQRResult<()> where W: Write {
     let nbits = match meta.version {
-        Version(0...9) => 8,
-        Version(10...26) => 10,
+        Version(0..=9) => 8,
+        Version(10..=26) => 10,
         _ => 12,
     };
 
@@ -214,7 +214,7 @@ fn decode_byte<W>(
     mut writer: W,
 ) -> DeQRResult<()> where W: Write {
     let nbits = match meta.version {
-        Version(0...9) => 8,
+        Version(0..=9) => 8,
         _ => 16
     };
 
@@ -237,8 +237,8 @@ fn decode_alpha<W>(
     mut writer: W,
 ) -> DeQRResult<()> where W: Write {
     let nbits = match meta.version {
-        Version(0...9) => 9,
-        Version(10...26) => 11,
+        Version(0..=9) => 9,
+        Version(10..=26) => 11,
         _ => 13,
     };
     let mut count = ds.take_bits(nbits);
@@ -285,8 +285,8 @@ fn decode_numeric<W>(
     mut writer: W,
 ) -> DeQRResult<()> where W: Write {
     let nbits = match meta.version {
-        Version(0...9) => 10,
-        Version(10...26) => 12,
+        Version(0..=9) => 10,
+        Version(10..=26) => 12,
         _ => 14,
     };
 
@@ -547,7 +547,7 @@ fn poly_add<G>(
 }
 
 fn read_data(
-    code: &BitGrid,
+    code: &dyn BitGrid,
     meta: &MetaData,
 ) -> RawData {
     let mut ds = RawData::new();
@@ -588,7 +588,7 @@ fn read_data(
 }
 
 fn read_bit(
-    code: &BitGrid,
+    code: &dyn BitGrid,
     meta: &MetaData,
     y: usize,
     x: usize,
@@ -710,7 +710,7 @@ fn correct_format(mut word: u16) -> DeQRResult<u16> {
     Ok(word)
 }
 
-fn read_format(code: &BitGrid) -> DeQRResult<MetaData> {
+fn read_format(code: &dyn BitGrid) -> DeQRResult<MetaData> {
     let mut format = 0;
 
     // Try first location
