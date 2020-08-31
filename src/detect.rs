@@ -511,7 +511,7 @@ mod tests {
         let w = img.width() as usize;
         let h = img.height() as usize;
         let mut img = crate::PreparedImage::prepare_from_greyscale(w, h, |x, y| {
-            img.get_pixel(x as u32, y as u32).data[0]
+            img.get_pixel(x as u32, y as u32).0[0]
         });
         crate::capstones_from_image(&mut img)
     }

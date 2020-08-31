@@ -123,7 +123,7 @@ pub trait BitGrid {
                     true => 0,
                     false => 255,
                 };
-                dyn_img.get_pixel_mut(x as u32, y as u32).data[0] = color;
+                dyn_img.get_pixel_mut(x as u32, y as u32).0[0] = color;
             }
         }
         dyn_img.save(p).unwrap();

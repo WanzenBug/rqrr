@@ -45,11 +45,11 @@ impl ImageBuffer for image::GrayImage {
     }
 
     fn get_pixel(&self, x: usize, y: usize) -> u8 {
-        self.get_pixel(x as u32, y as u32).data[0]
+        self.get_pixel(x as u32, y as u32).0[0]
     }
 
     fn set_pixel(&mut self, x: usize, y: usize, val: u8) {
-        self.get_pixel_mut(x as u32, y as u32).data[0] = val;
+        self.get_pixel_mut(x as u32, y as u32).0[0] = val;
     }
 }
 
@@ -335,7 +335,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
         for y in 0..self.height() {
             for x in 0..self.width() {
                 let px = self.buffer.get_pixel(x, y);
-                dyn_img.get_pixel_mut(x as u32, y as u32).data = if px == 0 {
+                dyn_img.get_pixel_mut(x as u32, y as u32).0 = if px == 0 {
                     [255, 255, 255]
                 } else if px == 1 {
                     [0, 0, 0]
