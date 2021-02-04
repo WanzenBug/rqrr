@@ -50,6 +50,15 @@ pub fn capstones_from_image<S>(img: &mut PreparedImage<S>) -> Vec<CapStone> wher
                 }
             }
         }
+
+        // Insert a virtual white pixel at the end to trigger a re-check. Necessary when the
+        // capstone lies right on the corner of an image
+        if let Some(linepos) = finder.advance(PixelColor::White) {
+            if is_capstone(img, &linepos, y) {
+                let cap = create_capstone(img, &linepos, y);
+                res.push(cap);
+            }
+        }
     }
     res
 }
@@ -504,6 +513,27 @@ mod tests {
             x: 2,
             y: 0,
         }, corners[3]);
+    }
+
+    #[test]
+    fn test_minimal_capstone() {
+        let array = [
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1],
+        ];
+
+        let mut prep_image = crate::PreparedImage::prepare_from_bitmap(7, 7, |x, y| {
+            array[y][x] == 1
+        });
+
+        let caps = crate::capstones_from_image(&mut prep_image);
+        assert_eq!(1, caps.len());
+        assert_eq!(Point { x: 3, y: 3}, caps[0].center)
     }
 
     fn load_and_find(img: &[u8]) -> Vec<CapStone> {
