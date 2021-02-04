@@ -17,25 +17,25 @@ impl Write for BrokenWriter {
 
 #[test]
 fn test_io_error() {
-    let img = image::open("tests/data/errors/io_error.png").unwrap().to_luma();
+    let img = image::open("tests/data/errors/io_error.png").unwrap().to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
-    
+
     assert_eq!(grids.len(), 1);
-    
+
     let writer = BrokenWriter {};
 
     let result = grids[0].decode_to(writer);
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_eq!(err, DeQRError::IoError);
-    
+
 }
 
 #[test]
 fn test_invalid_version() {
-    let img = image::open("tests/data/errors/invalid_version.gif").unwrap().to_luma();
+    let img = image::open("tests/data/errors/invalid_version.gif").unwrap().to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
@@ -43,14 +43,14 @@ fn test_invalid_version() {
 
     let decoded = grids[0].decode();
     assert!(decoded.is_err());
-    
+
     let err = decoded.unwrap_err();
     assert_eq!(err, DeQRError::InvalidVersion);
 }
 
 #[test]
 fn test_format_ecc() {
-    let img = image::open("tests/data/errors/format_ecc.png").unwrap().to_luma();
+    let img = image::open("tests/data/errors/format_ecc.png").unwrap().to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
@@ -59,14 +59,14 @@ fn test_format_ecc() {
     let decoded = grids[0].decode();
     println!("{:?}", decoded);
     assert!(decoded.is_err());
-    
+
     let err = decoded.unwrap_err();
     assert_eq!(err, DeQRError::FormatEcc);
 }
 
 #[test]
 fn test_data_ecc() {
-    let img = image::open("tests/data/errors/data_ecc.png").unwrap().to_luma();
+    let img = image::open("tests/data/errors/data_ecc.png").unwrap().to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();

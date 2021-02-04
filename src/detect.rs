@@ -537,7 +537,7 @@ mod tests {
     }
 
     fn load_and_find(img: &[u8]) -> Vec<CapStone> {
-        let img = image::load_from_memory(img).unwrap().to_luma();
+        let img = image::load_from_memory(img).unwrap().to_luma8();
         let w = img.width() as usize;
         let h = img.height() as usize;
         let mut img = crate::PreparedImage::prepare_from_greyscale(w, h, |x, y| {
@@ -570,5 +570,4 @@ mod tests {
         let caps = load_and_find(include_bytes!("test_data/cap_size.png"));
         assert_eq!(0, caps.len());
     }
-
 }

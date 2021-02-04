@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 #[test]
 fn test_full_time() {
-    let jpg = image::open("tests/data/full/gogh.jpg").unwrap().to_luma();
+    let jpg = image::open("tests/data/full/gogh.jpg").unwrap().to_luma8();
 
     let mut search_img = rqrr::PreparedImage::prepare(jpg);
     let grids = search_img.detect_grids();
@@ -25,7 +25,7 @@ fn test_full_time() {
 
 #[test]
 fn test_full_large_version() {
-    let gif = image::open("tests/data/full/superlong.gif").unwrap().to_luma();
+    let gif = image::open("tests/data/full/superlong.gif").unwrap().to_luma8();
 
     let mut search_img = rqrr::PreparedImage::prepare(gif);
     let grids = search_img.detect_grids();

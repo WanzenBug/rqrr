@@ -3,7 +3,7 @@ use image;
 use rqrr::{PreparedImage, BitGrid};
 
 fn test_data(buffer: &[u8]) -> PreparedImage<image::GrayImage> {
-    let img = image::load_from_memory(buffer).unwrap().to_luma();
+    let img = image::load_from_memory(buffer).unwrap().to_luma8();
     let bitimg = PreparedImage::prepare(img);
     bitimg
 }

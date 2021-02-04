@@ -269,7 +269,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
                             color,
                             ..
                         } => {
-                            self.flood_fill(src_x, src_y, color.into(), PixelColor::Black.into(), |_| ());
+                            let _ = self.flood_fill(src_x, src_y, color.into(), PixelColor::Black.into(), |_| ());
                         }
                         _ => (),
                     }
