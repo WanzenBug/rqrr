@@ -143,3 +143,20 @@ fn test_small_number() {
         }
     }
 }
+
+#[test]
+fn test_out_of_bound_grids() {
+    let buffer = include_bytes!("data/rqrr_incomplete.gif");
+    let mut img = test_data(buffer);
+    let mut grids = img.detect_grids();
+
+    assert_eq!(1, grids.len());
+    let c = grids.pop().unwrap();
+    assert_eq!(21, c.grid.size());
+
+    let (meta, data) = c.decode().unwrap();
+    assert_eq!(meta.ecc_level, 0);
+    assert_eq!(meta.mask, 0);
+    assert_eq!(meta.version, rqrr::Version(1));
+    assert_eq!(data, "rqrr");
+}

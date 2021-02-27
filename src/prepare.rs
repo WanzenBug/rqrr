@@ -305,14 +305,9 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
     }
 
     pub fn get_pixel_at_point(&self, p: Point) -> PixelColor {
-        if p.x < 0 || p.x as usize >= self.width() {
-            panic!("Out of bounds pixel access");
-        }
-        if p.y < 0 || p.y as usize >= self.height() {
-            panic!("Out of bounds pixel access");
-        }
-
-        self.buffer.get_pixel(p.x as usize, p.y as usize).into()
+        let x = cmp::max(0, cmp::min((self.width() - 1) as i32, p.x));
+        let y = cmp::max(0, cmp::min((self.height() - 1) as i32, p.y));
+        self.buffer.get_pixel(x as usize, y as usize).into()
     }
 
     pub fn get_pixel_at(&self, x: usize, y: usize) -> PixelColor {
