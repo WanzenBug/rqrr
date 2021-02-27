@@ -123,7 +123,7 @@ impl SkewedGridLocation {
 
 /// A Grid that references a bigger image
 ///
-/// Given a grid location and an image, imlement the [Grid trait](trait.Grid.html) so that it may
+/// Given a grid location and an image, implement the [Grid trait](trait.Grid.html) so that it may
 /// be decoded by [decode](fn.decode.html)
 pub struct RefGridImage<'a, S> {
     grid: SkewedGridLocation,
