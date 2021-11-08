@@ -35,7 +35,9 @@ pub trait ImageBuffer {
 }
 
 #[cfg(feature = "img")]
-impl ImageBuffer for image::GrayImage {
+impl<T: image::GenericImage<Pixel = image::Luma<u8>>
+    + image::GenericImageView<Pixel = image::Luma<u8>>,
+    > ImageBuffer for T {
     fn width(&self) -> usize {
         self.width() as usize
     }
