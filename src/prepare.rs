@@ -51,7 +51,9 @@ impl<T: image::GenericImage<Pixel = image::Luma<u8>>
     }
 
     fn set_pixel(&mut self, x: usize, y: usize, val: u8) {
-        self.get_pixel_mut(x as u32, y as u32).0[0] = val;
+        let pixel = image::Luma::<u8>::from([val; 1]);
+
+        self.put_pixel(x as u32, y as u32, pixel);
     }
 }
 

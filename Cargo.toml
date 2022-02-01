@@ -32,5 +32,5 @@ criterion = "0.3"
 
 [dependencies]
 g2p = "0.4"
-lru = "0.6"
-image = { version = "0.23", optional = true }
+lru = "0.7.2"
+image = { version = "0.24.0", optional = true }
