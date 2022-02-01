@@ -80,6 +80,14 @@ fn test_data_ecc() {
     assert_eq!(err, DeQRError::DataEcc);
 }
 
+#[test]
+fn test_panic() {
+    let img = image::open("tests/data/errors/panic.jpeg").unwrap().to_luma8();
+
+    let mut search_img = PreparedImage::prepare(img);
+    let _ = search_img.detect_grids();
+}
+
 // As of commit 956686877c964731559463dc645aa14e44e691b3, the following elements
 // of the DeQRError enum are not used anywhere:
 // - InvalidGridSize

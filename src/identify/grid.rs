@@ -248,16 +248,18 @@ fn find_alignment_pattern<S>(img: &mut PreparedImage<S>, mut align_seed: Point, 
             let y = align_seed.y as usize;
 
             // Alignment pattern should not be white
-            if PixelColor::White != img.get_pixel_at(x, y) {
-                let region = img.get_region((x, y));
-                let count = match region {
-                    ColoredRegion::Unclaimed { pixel_count, .. } => { pixel_count }
-                    _ => continue,
-                };
+            if x < img.width() && y < img.height() {
+                if PixelColor::White != img.get_pixel_at(x, y) {
+                    let region = img.get_region((x, y));
+                    let count = match region {
+                        ColoredRegion::Unclaimed { pixel_count, .. } => pixel_count,
+                        _ => continue,
+                    };
 
-                // Matches expected size of alignment pattern
-                if count >= size_estimate / 2 && count <= size_estimate * 2 {
-                    return Some(align_seed);
+                    // Matches expected size of alignment pattern
+                    if count >= size_estimate / 2 && count <= size_estimate * 2 {
+                        return Some(align_seed);
+                    }
                 }
             }
 
