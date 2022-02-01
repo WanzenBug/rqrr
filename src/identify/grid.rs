@@ -347,7 +347,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
  * grid.
  */
 fn fitness_all<S>(img: &PreparedImage<S>, perspective: &geometry::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
-    let version = (grid_size - 17) / 4;
+    let version = ((grid_size - 17) / 4) % VERSION_DATA_BASE.len();
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
 
