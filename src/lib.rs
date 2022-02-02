@@ -10,9 +10,9 @@
 //! ```rust
 //! use image;
 //!
-//! # fn main() -> Result<(), Box<::std::error::Error>> {
+//! # fn main() -> Result<(), Box<dyn ::std::error::Error>> {
 //! // Load on image to search, convert it to grayscale
-//! let img = image::open("tests/data/github.gif")?.to_luma();
+//! let img = image::open("tests/data/github.gif")?.to_luma8();
 //! // Prepare for detection
 //! let mut img = rqrr::PreparedImage::prepare(img);
 //! // Search for grids, without decoding
