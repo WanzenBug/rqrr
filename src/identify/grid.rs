@@ -101,6 +101,10 @@ impl SkewedGridLocation {
             align = found.best;
         }
 
+        if version_from_grid_size(grid_size) >= VERSION_DATA_BASE.len() {
+            return None;
+        }
+
         let c = setup_perspective(img, &group, align, grid_size);
         let caps = [group.0, group.1, group.2];
 
@@ -119,6 +123,14 @@ impl SkewedGridLocation {
             img,
         }
     }
+}
+
+/// Get the version for a given grid size.
+///
+/// The returned version can be used to fetch the VersionInfo for the given grid
+/// size.
+fn version_from_grid_size(grid_size: usize) -> usize {
+    (grid_size - 17) / 4
 }
 
 /// A Grid that references a bigger image
@@ -347,7 +359,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
  * grid.
  */
 fn fitness_all<S>(img: &PreparedImage<S>, perspective: &geometry::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
-    let version = ((grid_size - 17) / 4) % VERSION_DATA_BASE.len();
+    let version = version_from_grid_size(grid_size);
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
 
