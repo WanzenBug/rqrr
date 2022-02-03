@@ -81,13 +81,17 @@ fn test_data_ecc() {
 }
 
 #[test]
-fn test_panic() {
-    let img = image::open("tests/data/errors/panic.jpeg").unwrap().to_luma8();
+fn test_should_not_panic() {
+    let img = image::open("tests/data/errors/should-not-panic-1.jpg")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let _ = search_img.detect_grids();
 
-    let img = image::open("tests/data/errors/panic2.jpeg").unwrap().to_luma8();
+    let img = image::open("tests/data/errors/should-not-panic-2.jpg")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let _ = search_img.detect_grids();
