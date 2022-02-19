@@ -101,6 +101,10 @@ impl SkewedGridLocation {
             align = found.best;
         }
 
+        if version_from_grid_size(grid_size) >= VERSION_DATA_BASE.len() {
+            return None;
+        }
+
         let c = setup_perspective(img, &group, align, grid_size);
         let caps = [group.0, group.1, group.2];
 
@@ -119,6 +123,14 @@ impl SkewedGridLocation {
             img,
         }
     }
+}
+
+/// Get the version for a given grid size.
+///
+/// The returned version can be used to fetch the VersionInfo for the given grid
+/// size.
+fn version_from_grid_size(grid_size: usize) -> usize {
+    (grid_size - 17) / 4
 }
 
 /// A Grid that references a bigger image
@@ -248,16 +260,18 @@ fn find_alignment_pattern<S>(img: &mut PreparedImage<S>, mut align_seed: Point, 
             let y = align_seed.y as usize;
 
             // Alignment pattern should not be white
-            if PixelColor::White != img.get_pixel_at(x, y) {
-                let region = img.get_region((x, y));
-                let count = match region {
-                    ColoredRegion::Unclaimed { pixel_count, .. } => { pixel_count }
-                    _ => continue,
-                };
+            if x < img.width() && y < img.height() {
+                if PixelColor::White != img.get_pixel_at(x, y) {
+                    let region = img.get_region((x, y));
+                    let count = match region {
+                        ColoredRegion::Unclaimed { pixel_count, .. } => pixel_count,
+                        _ => continue,
+                    };
 
-                // Matches expected size of alignment pattern
-                if count >= size_estimate / 2 && count <= size_estimate * 2 {
-                    return Some(align_seed);
+                    // Matches expected size of alignment pattern
+                    if count >= size_estimate / 2 && count <= size_estimate * 2 {
+                        return Some(align_seed);
+                    }
                 }
             }
 
@@ -345,7 +359,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
  * grid.
  */
 fn fitness_all<S>(img: &PreparedImage<S>, perspective: &geometry::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
-    let version = (grid_size - 17) / 4;
+    let version = version_from_grid_size(grid_size);
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
 
