@@ -4,7 +4,7 @@ use crate::identify::Point;
 pub struct Perspective(pub [f64; 8]);
 
 impl Perspective {
-    pub fn create(rect: &[Point; 4], w: f64, h: f64) -> Self {
+    pub fn create(rect: &[Point; 4], w: f64, h: f64) -> Option<Self> {
         let mut c = [0.0; 8];
         let x0 = rect[0].x as f64;
         let y0 = rect[0].y as f64;
@@ -16,6 +16,11 @@ impl Perspective {
         let y3 = rect[3].y as f64;
         let wden = w * (x2 * y3 - x3 * y2 + (x3 - x2) * y1 + x1 * (y2 - y3));
         let hden = h * (x2 * y3 + x1 * (y2 - y3) - x3 * y2 + (x3 - x2) * y1);
+
+        if wden < f64::EPSILON || hden < f64::EPSILON {
+            return None;
+        }
+
         c[0] = (x1 * (x2 * y3 - x3 * y2)
             + x0 * (-x2 * y3 + x3 * y2 + (x2 - x3) * y1)
             + x1 * (x3 - x2) * y0) / wden;
@@ -33,7 +38,7 @@ impl Perspective {
         c[7] =
             (-x2 * y3 + x1 * y3 + x3 * y2 + x0 * (y1 - y2) - x3 * y1 + (x2 - x1) * y0) / hden;
 
-        Perspective(c)
+        Some(Perspective(c))
     }
 
     pub fn map(&self, u: f64, v: f64) -> Point {
@@ -44,10 +49,10 @@ impl Perspective {
         let x = x.round();
         let y = y.round();
 
-        assert!(x <= i32::max_value() as f64);
-        assert!(x >= i32::min_value() as f64);
-        assert!(y <= i32::max_value() as f64);
-        assert!(y >= i32::min_value() as f64);
+        assert!(x <= i32::MAX as f64);
+        assert!(x >= i32::MIN as f64);
+        assert!(y <= i32::MAX as f64);
+        assert!(y >= i32::MIN as f64);
         Point {
             x: x as i32,
             y: y as i32,

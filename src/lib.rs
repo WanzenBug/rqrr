@@ -72,7 +72,7 @@ impl<G> Grid<G> where G: BitGrid {
                 Point { x: 0, y: 0 },
                 Point { x: 0, y: 0 },
                 Point { x: 0, y: 0 },
-            ]
+            ],
         }
     }
 

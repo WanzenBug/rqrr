@@ -105,7 +105,7 @@ impl SkewedGridLocation {
             return None;
         }
 
-        let c = setup_perspective(img, &group, align, grid_size);
+        let c = setup_perspective(img, &group, align, grid_size)?;
         let caps = [group.0, group.1, group.2];
 
         Some(SkewedGridLocation {
@@ -153,15 +153,15 @@ impl<'a, S> BitGrid for RefGridImage<'a, S> where S: ImageBuffer {
     }
 }
 
-fn setup_perspective<S>(img: &PreparedImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> geometry::Perspective where S: ImageBuffer {
+fn setup_perspective<S>(img: &PreparedImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> Option<geometry::Perspective> where S: ImageBuffer {
     let inital = geometry::Perspective::create(&[
         caps.1.corners[0],
         caps.2.corners[0],
         align,
         caps.0.corners[0],
-    ], (grid_size - 7) as f64, (grid_size - 7) as f64);
+    ], (grid_size - 7) as f64, (grid_size - 7) as f64)?;
 
-    jiggle_perspective(img, inital, grid_size)
+    Some(jiggle_perspective(img, inital, grid_size))
 }
 
 fn rotate_capstone(
@@ -177,7 +177,7 @@ fn rotate_capstone(
 
     /* Rotate the capstone */
     cap.corners.rotate_left(best_idx);
-    cap.c = geometry::Perspective::create(&cap.corners, 7.0, 7.0);
+    cap.c = geometry::Perspective::create(&cap.corners, 7.0, 7.0).expect("rotated perspective can't fail");
 }
 
 //* Try the measure the timing pattern for a given QR code. This does
