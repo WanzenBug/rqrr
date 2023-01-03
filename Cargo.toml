@@ -28,9 +28,9 @@ required-features = ["img"]
 harness = false
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4"
 
 [dependencies]
-g2p = "0.4"
-lru = "0.7.2"
-image = { version = "0.24.0", optional = true }
+g2p = "1.0"
+lru = "0.9"
+image = { version = "0.24", optional = true }

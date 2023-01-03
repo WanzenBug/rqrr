@@ -1,4 +1,4 @@
-use std::cmp;
+use std::{cmp, num::NonZeroUsize};
 
 use crate::identify::Point;
 use lru::LruCache;
@@ -205,7 +205,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
 
         PreparedImage {
             buffer: buf,
-            cache: LruCache::new(251)
+            cache: LruCache::new(NonZeroUsize::new(251).unwrap())
         }
     }
 
@@ -242,7 +242,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
 
         PreparedImage {
             buffer: buf,
-            cache: LruCache::new(251)
+            cache: LruCache::new(NonZeroUsize::new(251).unwrap())
         }
     }
 
@@ -264,7 +264,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
             }
             PixelColor::Black => {
                 let cache_fill = self.cache.len();
-                let reg_idx = if cache_fill == self.cache.cap() {
+                let reg_idx = if cache_fill == self.cache.cap().get() {
                     let (c, reg) = self.cache.pop_lru().expect("fill is at capacity (251)");
                     match reg {
                         ColoredRegion::Unclaimed {
@@ -497,7 +497,7 @@ mod tests {
 
         PreparedImage {
             buffer,
-            cache: LruCache::new(251),
+            cache: LruCache::new(NonZeroUsize::new(251).unwrap()),
         }
     }
 
