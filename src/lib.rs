@@ -55,6 +55,9 @@ pub struct Grid<G> {
     pub grid: G,
     /// The bounds of the square, in underlying coordinates.
     ///
+    /// The points are listed in the following order:
+    /// [top-left, top-right, bottom-right, bottom-left]
+    ///
     /// If this grid references for example an underlying image, these values will be set to
     /// coordinates in that image.
     pub bounds: [Point; 4],
