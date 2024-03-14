@@ -17,7 +17,7 @@ jobs:
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
         toolchain:
-          - 1.67.1 # MSRV
+          - 1.74.0 # MSRV
           - stable
           - nightly
         include:
@@ -37,8 +37,8 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Run tests
         run: cargo test --target ${{ matrix.target }}
-      # - name: Run tests (no default features)
-        # run: cargo test --target ${{ matrix.target }} --no-default-features
+      - name: Run tests (no default features)
+        run: cargo test --target ${{ matrix.target }} --no-default-features
 
   rustfmt:
     name: Rustfmt
