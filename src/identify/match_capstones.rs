@@ -1,12 +1,7 @@
 use crate::CapStone;
 
 #[derive(Debug, Clone)]
-pub struct CapStoneGroup(
-    pub CapStone,
-    pub CapStone,
-    pub CapStone
-);
-
+pub struct CapStoneGroup(pub CapStone, pub CapStone, pub CapStone);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Neighbor {
@@ -16,28 +11,22 @@ struct Neighbor {
 
 /// Find CapStones that form a grid
 ///
-/// By trying to match up the relative perspective of 3 [CapStones](struct.CapStone.html) we can
-/// find those that corner the same QR code.
+/// By trying to match up the relative perspective of 3
+/// [CapStones](struct.CapStone.html) we can find those that corner the same QR
+/// code.
 pub fn find_groupings(mut capstones: Vec<CapStone>) -> Vec<CapStoneGroup> {
     let mut idx = 0;
     let mut groups = Vec::new();
     while idx < capstones.len() {
         let (hlist, vlist) = find_possible_neighbors(&capstones, idx);
         match test_neighbours(&hlist, &vlist) {
-            None => {
-                idx += 1
-            }
+            None => idx += 1,
             Some((h_idx, v_idx)) => {
-                let group = remove_capstones_in_order(&mut capstones,
-                                                      h_idx,
-                                                      idx,
-                                                      v_idx);
+                let group = remove_capstones_in_order(&mut capstones, h_idx, idx, v_idx);
                 groups.push(group);
 
                 // Update index for items removed
-                let sub = [h_idx, v_idx].iter()
-                    .filter(|&&i| i < idx)
-                    .count();
+                let sub = [h_idx, v_idx].iter().filter(|&&i| i < idx).count();
                 idx -= sub;
             }
         }
@@ -46,10 +35,12 @@ pub fn find_groupings(mut capstones: Vec<CapStone>) -> Vec<CapStoneGroup> {
     groups
 }
 
-fn remove_capstones_in_order(caps: &mut Vec<CapStone>,
-                             first: usize,
-                             second: usize,
-                             third: usize) -> CapStoneGroup {
+fn remove_capstones_in_order(
+    caps: &mut Vec<CapStone>,
+    first: usize,
+    second: usize,
+    third: usize,
+) -> CapStoneGroup {
     assert_ne!(first, second);
     assert_ne!(first, third);
     assert_ne!(second, third);
@@ -85,6 +76,7 @@ fn find_possible_neighbors(capstones: &[CapStone], idx: usize) -> (Vec<Neighbor>
     /* Look for potential neighbours by examining the relative gradients
      * from this capstone to others.
      */
+    #[allow(clippy::needless_range_loop)]
     for others_idx in 0..capstones.len() {
         if others_idx == idx {
             continue;
@@ -114,10 +106,7 @@ fn find_possible_neighbors(capstones: &[CapStone], idx: usize) -> (Vec<Neighbor>
     (hlist, vlist)
 }
 
-fn test_neighbours(
-    hlist: &[Neighbor],
-    vlist: &[Neighbor],
-) -> Option<(usize, usize)> {
+fn test_neighbours(hlist: &[Neighbor], vlist: &[Neighbor]) -> Option<(usize, usize)> {
     // Worse scores will be ignored anyway
     let mut best_score = 2.5;
     let mut best_h = None;
@@ -132,13 +121,9 @@ fn test_neighbours(
             }
 
             let new = match (best_h, score) {
-                (None, _) => {
-                    (Some(hn.index), Some(vn.index), score)
-                }
-                (Some(_), b) if b < best_score => {
-                    (Some(hn.index), Some(vn.index), b)
-                }
-                _ => (best_h, best_v, best_score)
+                (None, _) => (Some(hn.index), Some(vn.index), score),
+                (Some(_), b) if b < best_score => (Some(hn.index), Some(vn.index), b),
+                _ => (best_h, best_v, best_score),
             };
 
             best_h = new.0;
@@ -148,8 +133,7 @@ fn test_neighbours(
     }
 
     match (best_h, best_v) {
-        (None, _)
-        | (_, None) => None,
-        (Some(h), Some(v)) => Some((h, v))
+        (None, _) | (_, None) => None,
+        (Some(h), Some(v)) => Some((h, v)),
     }
 }

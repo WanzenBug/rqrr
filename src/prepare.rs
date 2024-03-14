@@ -5,18 +5,22 @@ use lru::LruCache;
 
 /// An black-and-white image that can be mutated on search for QR codes
 ///
-/// During search for QR codes, some black zones will be recolored in 'different' shades of black.
-/// This is done to speed up the search and mitigate the impact of a huge zones.
+/// During search for QR codes, some black zones will be recolored in
+/// 'different' shades of black. This is done to speed up the search and
+/// mitigate the impact of a huge zones.
 pub struct PreparedImage<S> {
     buffer: S,
     cache: LruCache<u8, ColoredRegion>,
 }
 
-impl<S> Clone for PreparedImage<S> where S: Clone {
+impl<S> Clone for PreparedImage<S>
+where
+    S: Clone,
+{
     fn clone(&self) -> Self {
         let mut cache = LruCache::new(self.cache.cap());
         for (k, v) in self.cache.iter() {
-            cache.put(*k, v.clone());
+            cache.put(*k, *v);
         }
 
         PreparedImage {
@@ -35,9 +39,11 @@ pub trait ImageBuffer {
 }
 
 #[cfg(feature = "img")]
-impl<T: image::GenericImage<Pixel = image::Luma<u8>>
-    + image::GenericImageView<Pixel = image::Luma<u8>>,
-    > ImageBuffer for T {
+impl<
+        T: image::GenericImage<Pixel = image::Luma<u8>>
+            + image::GenericImageView<Pixel = image::Luma<u8>>,
+    > ImageBuffer for T
+{
     fn width(&self) -> usize {
         self.width() as usize
     }
@@ -90,7 +96,6 @@ pub struct Row {
     pub right: usize,
     pub y: usize,
 }
-
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum PixelColor {
@@ -152,7 +157,10 @@ pub trait AreaFiller {
     fn update(&mut self, row: Row);
 }
 
-impl<F> AreaFiller for F where F: FnMut(Row) -> () {
+impl<F> AreaFiller for F
+where
+    F: FnMut(Row),
+{
     fn update(&mut self, row: Row) {
         self(row)
     }
@@ -166,7 +174,10 @@ impl AreaFiller for AreaCounter {
     }
 }
 
-impl<S> PreparedImage<S> where S: ImageBuffer {
+impl<S> PreparedImage<S>
+where
+    S: ImageBuffer,
+{
     pub fn prepare(mut buf: S) -> Self {
         let w = buf.width();
         let h = buf.height();
@@ -193,8 +204,11 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
                 row_average[u] += avg_u;
             }
 
+            #[allow(clippy::needless_range_loop)]
             for x in 0..w {
-                let fill = if (buf.get_pixel(x, y) as usize) < row_average[x] * (100 - 5) / (200 * threshold_s) {
+                let fill = if (buf.get_pixel(x, y) as usize)
+                    < row_average[x] * (100 - 5) / (200 * threshold_s)
+                {
                     PixelColor::Black
                 } else {
                     PixelColor::White
@@ -205,7 +219,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
 
         PreparedImage {
             buffer: buf,
-            cache: LruCache::new(NonZeroUsize::new(251).unwrap())
+            cache: LruCache::new(NonZeroUsize::new(251).unwrap()),
         }
     }
 
@@ -213,21 +227,26 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
         let mut res = Vec::new();
         let stones = crate::capstones_from_image(self);
         let groups = crate::identify::find_groupings(stones);
-        let locations: Vec<_> = groups.into_iter()
+        let locations: Vec<_> = groups
+            .into_iter()
             .filter_map(|v| crate::SkewedGridLocation::from_group(self, v))
             .collect();
         for grid_location in locations {
-            let bounds =  [
+            let bounds = [
                 grid_location.c.map(0.0, 0.0),
-                grid_location.c.map(grid_location.grid_size as f64 + 1.0, 0.0),
-                grid_location.c.map(grid_location.grid_size as f64 + 1.0, grid_location.grid_size as f64 + 1.0),
-                grid_location.c.map(0.0, grid_location.grid_size as f64 + 1.0),
+                grid_location
+                    .c
+                    .map(grid_location.grid_size as f64 + 1.0, 0.0),
+                grid_location.c.map(
+                    grid_location.grid_size as f64 + 1.0,
+                    grid_location.grid_size as f64 + 1.0,
+                ),
+                grid_location
+                    .c
+                    .map(0.0, grid_location.grid_size as f64 + 1.0),
             ];
             let grid = grid_location.into_grid_image(self);
-            res.push(crate::Grid {
-                grid,
-                bounds,
-            });
+            res.push(crate::Grid { grid, bounds });
         }
 
         res
@@ -242,7 +261,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
 
         PreparedImage {
             buffer: buf,
-            cache: LruCache::new(NonZeroUsize::new(251).unwrap())
+            cache: LruCache::new(NonZeroUsize::new(251).unwrap()),
         }
     }
 
@@ -259,13 +278,12 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
     pub(crate) fn get_region(&mut self, (x, y): (usize, usize)) -> ColoredRegion {
         let color: PixelColor = self.buffer.get_pixel(x, y).into();
         match color {
-            PixelColor::Discarded(r) => {
-                self.cache.get(&r).unwrap().clone()
-            }
+            PixelColor::Discarded(r) => *self.cache.get(&r).unwrap(),
             PixelColor::Black => {
                 let cache_fill = self.cache.len();
                 let reg_idx = if cache_fill == self.cache.cap().get() {
                     let (c, reg) = self.cache.pop_lru().expect("fill is at capacity (251)");
+                    #[allow(clippy::single_match)]
                     match reg {
                         ColoredRegion::Unclaimed {
                             src_x,
@@ -273,7 +291,13 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
                             color,
                             ..
                         } => {
-                            let _ = self.flood_fill(src_x, src_y, color.into(), PixelColor::Black.into(), |_| ());
+                            let _ = self.flood_fill(
+                                src_x,
+                                src_y,
+                                color.into(),
+                                PixelColor::Black.into(),
+                                |_| (),
+                            );
                         }
                         _ => (),
                     }
@@ -299,7 +323,15 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
         }
     }
 
-    pub(crate) fn repaint_and_apply<F>(&mut self, (x, y): (usize, usize), target_color: PixelColor, fill: F) -> F where F: AreaFiller {
+    pub(crate) fn repaint_and_apply<F>(
+        &mut self,
+        (x, y): (usize, usize),
+        target_color: PixelColor,
+        fill: F,
+    ) -> F
+    where
+        F: AreaFiller,
+    {
         let src = self.buffer.get_pixel(x, y);
         if PixelColor::White == src || target_color == src {
             panic!("Cannot repaint with white or same color");
@@ -347,14 +379,10 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
         dyn_img.save(p).unwrap();
     }
 
-    fn flood_fill<F>(
-        &mut self,
-        x: usize,
-        y: usize,
-        from: u8,
-        to: u8,
-        mut fill: F,
-    ) -> F where F: AreaFiller {
+    fn flood_fill<F>(&mut self, x: usize, y: usize, from: u8, to: u8, mut fill: F) -> F
+    where
+        F: AreaFiller,
+    {
         assert_ne!(from, to);
         let w = self.width();
         let mut queue = Vec::new();
@@ -381,12 +409,7 @@ impl<S> PreparedImage<S> where S: ImageBuffer {
                 self.buffer.set_pixel(idx, y, to);
             }
 
-
-            fill.update(Row {
-                left,
-                right,
-                y,
-            });
+            fill.update(Row { left, right, y });
 
             /* Seed new flood-fills */
             if y > 0 {
@@ -426,7 +449,10 @@ impl PreparedImage<BasicImageBuffer> {
     /// Given a function with binary output, generate a searchable image
     ///
     /// If the given function returns `true` the matching pixel will be 'black'.
-    pub fn prepare_from_bitmap<F>(w: usize, h: usize, mut fill: F) -> Self where F: FnMut(usize, usize) -> bool {
+    pub fn prepare_from_bitmap<F>(w: usize, h: usize, mut fill: F) -> Self
+    where
+        F: FnMut(usize, usize) -> bool,
+    {
         let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
         let mut pixels = Vec::with_capacity(capacity);
 
@@ -441,22 +467,18 @@ impl PreparedImage<BasicImageBuffer> {
             }
         }
         let pixels = pixels.into_boxed_slice();
-        let buffer = BasicImageBuffer {
-            w,
-            h,
-            pixels,
-        };
+        let buffer = BasicImageBuffer { w, h, pixels };
         PreparedImage::without_preparation(buffer)
     }
 
     /// Given a byte valued function, generate a searchable image
     ///
-    /// The values returned by the function are interpreted as luminance. i.e. a value of
-    /// 0 is black, 255 is white.
-    pub fn prepare_from_greyscale<F>(w: usize,
-                                     h: usize,
-                                     mut fill: F,
-    ) -> Self where F: FnMut(usize, usize) -> u8 {
+    /// The values returned by the function are interpreted as luminance. i.e. a
+    /// value of 0 is black, 255 is white.
+    pub fn prepare_from_greyscale<F>(w: usize, h: usize, mut fill: F) -> Self
+    where
+        F: FnMut(usize, usize) -> u8,
+    {
         let capacity = w.checked_mul(h).expect("Image dimensions caused overflow");
         let mut data = Vec::with_capacity(capacity);
         for y in 0..h {
@@ -465,11 +487,7 @@ impl PreparedImage<BasicImageBuffer> {
             }
         }
         let pixels = data.into_boxed_slice();
-        let buffer = BasicImageBuffer {
-            w,
-            h,
-            pixels,
-        };
+        let buffer = BasicImageBuffer { w, h, pixels };
         PreparedImage::prepare(buffer)
     }
 }
@@ -503,11 +521,7 @@ mod tests {
 
     #[test]
     fn test_flood_fill_full() {
-        let mut test_full = img_from_array([
-            [1, 1, 1],
-            [1, 1, 1],
-            [1, 1, 1],
-        ]);
+        let mut test_full = img_from_array([[1, 1, 1], [1, 1, 1], [1, 1, 1]]);
 
         test_full.flood_fill(0, 0, 1, 2, &mut |_| ());
 
@@ -520,11 +534,7 @@ mod tests {
 
     #[test]
     fn test_flood_fill_single() {
-        let mut test_single = img_from_array([
-            [1, 0, 1],
-            [0, 1, 0],
-            [1, 0, 1],
-        ]);
+        let mut test_single = img_from_array([[1, 0, 1], [0, 1, 0], [1, 0, 1]]);
 
         test_single.flood_fill(1, 1, 1, 2, &mut |_| ());
 
@@ -533,11 +543,7 @@ mod tests {
                 if x == 1 && y == 1 {
                     assert_eq!(test_single.get_pixel_at(x, y), 2);
                 } else {
-                    let col = if (x + y) % 2 == 0 {
-                        1
-                    } else {
-                        0
-                    };
+                    let col = if (x + y) % 2 == 0 { 1 } else { 0 };
                     assert_eq!(test_single.get_pixel_at(x, y), col);
                 }
             }
@@ -546,11 +552,7 @@ mod tests {
 
     #[test]
     fn test_flood_fill_ring() {
-        let mut test_ring = img_from_array([
-            [1, 1, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-        ]);
+        let mut test_ring = img_from_array([[1, 1, 1], [1, 0, 1], [1, 1, 1]]);
 
         test_ring.flood_fill(0, 0, 1, 2, &mut |_| ());
 
@@ -567,12 +569,7 @@ mod tests {
 
     #[test]
     fn test_flood_fill_u() {
-        let mut test_u = img_from_array([
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-        ]);
-
+        let mut test_u = img_from_array([[1, 0, 1], [1, 0, 1], [1, 1, 1]]);
 
         test_u.flood_fill(0, 0, 1, 2, &mut |_| ());
 
@@ -589,11 +586,7 @@ mod tests {
 
     #[test]
     fn test_flood_fill_empty() {
-        let mut test_empty = img_from_array([
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-        ]);
+        let mut test_empty = img_from_array([[0, 0, 0], [0, 0, 0], [0, 0, 0]]);
 
         test_empty.flood_fill(1, 1, 1, 2, &mut |_| ());
 
@@ -606,11 +599,7 @@ mod tests {
 
     #[test]
     fn test_get_region() {
-        let mut test_u = img_from_array([
-            [1, 0, 1],
-            [1, 0, 1],
-            [1, 1, 1],
-        ]);
+        let mut test_u = img_from_array([[1, 0, 1], [1, 0, 1], [1, 1, 1]]);
 
         let reg = test_u.get_region((0, 0));
         let (color, src_x, src_y, pixel_count) = match reg {
@@ -620,7 +609,7 @@ mod tests {
                 src_y,
                 pixel_count,
             } => (color, src_x, src_y, pixel_count),
-            x @ _ => panic!("Expected Region::Unclaimed, got {:?}", x),
+            x => panic!("Expected Region::Unclaimed, got {:?}", x),
         };
         assert_eq!(0, src_x);
         assert_eq!(0, src_y);

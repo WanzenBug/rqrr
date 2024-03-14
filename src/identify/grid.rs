@@ -1,32 +1,19 @@
-use std::{
-    cmp,
-    mem,
-};
+use std::{cmp, mem};
 
 use crate::{
-    CapStone,
-    BitGrid,
     geometry,
-    identify::{
-        match_capstones::CapStoneGroup,
-    },
-    Point,
-    prepare::{
-        AreaFiller,
-        ImageBuffer,
-        PixelColor,
-        ColoredRegion,
-        Row,
-    },
+    identify::match_capstones::CapStoneGroup,
     prepare::PreparedImage,
+    prepare::{AreaFiller, ColoredRegion, ImageBuffer, PixelColor, Row},
     version_db::VERSION_DATA_BASE,
+    BitGrid, CapStone, Point,
 };
 
 /// Location of a skewed square in an image
 ///
-/// A skewed square formed by 3 [CapStones](struct.CapStone.html) and possibly an alignment
-/// pattern located in the 4th corner. This can be converted into a normal [Grid](trait.Grid.html)
-/// that can be decoded.
+/// A skewed square formed by 3 [CapStones](struct.CapStone.html) and possibly
+/// an alignment pattern located in the 4th corner. This can be converted into a
+/// normal [Grid](trait.Grid.html) that can be decoded.
 #[derive(Debug, Clone)]
 pub struct SkewedGridLocation {
     pub caps: [CapStone; 3],
@@ -38,20 +25,24 @@ pub struct SkewedGridLocation {
 impl SkewedGridLocation {
     /// Create a SkewedGridLocation from corners
     ///
-    /// Given 3 corners of a grid, this tries to match the expected features of a QR code
-    /// such that the SkewedGridLocation maps onto those features.
+    /// Given 3 corners of a grid, this tries to match the expected features of
+    /// a QR code such that the SkewedGridLocation maps onto those features.
     ///
-    /// For all grids this includes searching for timing patterns between capstones to determine
-    /// the grid size.
+    /// For all grids this includes searching for timing patterns between
+    /// capstones to determine the grid size.
     ///
-    /// For bigger grids this includes searching for an alignment pattern in the 4 corner.
+    /// For bigger grids this includes searching for an alignment pattern in the
+    /// 4 corner.
     ///
     /// If no sufficient match could be produces, return `None` instead.
-    pub fn from_group<S>(img: &mut PreparedImage<S>, mut group: CapStoneGroup) -> Option<Self> where S: ImageBuffer {
+    pub fn from_group<S>(img: &mut PreparedImage<S>, mut group: CapStoneGroup) -> Option<Self>
+    where
+        S: ImageBuffer,
+    {
         /* Construct the hypotenuse line from A to C. B should be to
          * the left of this line.
          */
-        let mut h0 = group.0.center;
+        let h0 = group.0.center;
         let mut hd = Point {
             x: group.2.center.x - group.0.center.x,
             y: group.2.center.y - group.0.center.y,
@@ -67,9 +58,9 @@ impl SkewedGridLocation {
         /* Rotate each capstone so that corner 0 is top-left with respect
          * to the grid.
          */
-        rotate_capstone(&mut group.0, &mut h0, &mut hd);
-        rotate_capstone(&mut group.1, &mut h0, &mut hd);
-        rotate_capstone(&mut group.2, &mut h0, &mut hd);
+        rotate_capstone(&mut group.0, &h0, &hd);
+        rotate_capstone(&mut group.1, &h0, &hd);
+        rotate_capstone(&mut group.2, &h0, &hd);
 
         /* Check the timing pattern. This doesn't require a perspective
          * transform.
@@ -97,7 +88,11 @@ impl SkewedGridLocation {
                 best: align,
                 score,
             };
-            let found = img.repaint_and_apply((align.x as usize, align.y as usize), PixelColor::Alignment, finder);
+            let found = img.repaint_and_apply(
+                (align.x as usize, align.y as usize),
+                PixelColor::Alignment,
+                finder,
+            );
             align = found.best;
         }
 
@@ -118,10 +113,7 @@ impl SkewedGridLocation {
 
     /// Convert into a grid referencing the underlying image as source
     pub fn into_grid_image<S>(self, img: &PreparedImage<S>) -> RefGridImage<S> {
-        RefGridImage {
-            grid: self,
-            img,
-        }
+        RefGridImage { grid: self, img }
     }
 }
 
@@ -135,14 +127,18 @@ fn version_from_grid_size(grid_size: usize) -> usize {
 
 /// A Grid that references a bigger image
 ///
-/// Given a grid location and an image, implement the [Grid trait](trait.Grid.html) so that it may
-/// be decoded by [decode](fn.decode.html)
+/// Given a grid location and an image, implement the [Grid
+/// trait](trait.Grid.html) so that it may be decoded by
+/// [decode](fn.decode.html)
 pub struct RefGridImage<'a, S> {
     grid: SkewedGridLocation,
     img: &'a PreparedImage<S>,
 }
 
-impl<'a, S> BitGrid for RefGridImage<'a, S> where S: ImageBuffer {
+impl<'a, S> BitGrid for RefGridImage<'a, S>
+where
+    S: ImageBuffer,
+{
     fn size(&self) -> usize {
         self.grid.grid_size
     }
@@ -153,31 +149,41 @@ impl<'a, S> BitGrid for RefGridImage<'a, S> where S: ImageBuffer {
     }
 }
 
-fn setup_perspective<S>(img: &PreparedImage<S>, caps: &CapStoneGroup, align: Point, grid_size: usize) -> Option<geometry::Perspective> where S: ImageBuffer {
-    let inital = geometry::Perspective::create(&[
-        caps.1.corners[0],
-        caps.2.corners[0],
-        align,
-        caps.0.corners[0],
-    ], (grid_size - 7) as f64, (grid_size - 7) as f64)?;
+fn setup_perspective<S>(
+    img: &PreparedImage<S>,
+    caps: &CapStoneGroup,
+    align: Point,
+    grid_size: usize,
+) -> Option<geometry::Perspective>
+where
+    S: ImageBuffer,
+{
+    let inital = geometry::Perspective::create(
+        &[
+            caps.1.corners[0],
+            caps.2.corners[0],
+            align,
+            caps.0.corners[0],
+        ],
+        (grid_size - 7) as f64,
+        (grid_size - 7) as f64,
+    )?;
 
     Some(jiggle_perspective(img, inital, grid_size))
 }
 
-fn rotate_capstone(
-    cap: &mut CapStone,
-    h0: &Point,
-    hd: &Point,
-) -> () {
-    let (best_idx, _) = cap.corners.iter()
+fn rotate_capstone(cap: &mut CapStone, h0: &Point, hd: &Point) {
+    let (best_idx, _) = cap
+        .corners
+        .iter()
         .enumerate()
-        .min_by_key(|(_, a)| {
-            (a.x - h0.x) * (-hd.y) + (a.y - h0.y) * hd.x
-        }).expect("corners cannot be empty");
+        .min_by_key(|(_, a)| (a.x - h0.x) * (-hd.y) + (a.y - h0.y) * hd.x)
+        .expect("corners cannot be empty");
 
     /* Rotate the capstone */
     cap.corners.rotate_left(best_idx);
-    cap.c = geometry::Perspective::create(&cap.corners, 7.0, 7.0).expect("rotated perspective can't fail");
+    cap.c = geometry::Perspective::create(&cap.corners, 7.0, 7.0)
+        .expect("rotated perspective can't fail");
 }
 
 //* Try the measure the timing pattern for a given QR code. This does
@@ -189,10 +195,10 @@ fn rotate_capstone(
 // * which is nearest the centre of the code. Using these points, we do
 // * a horizontal and a vertical timing scan.
 // */
-fn measure_timing_pattern<S>(
-    img: &PreparedImage<S>,
-    caps: &CapStoneGroup,
-) -> usize where S: ImageBuffer {
+fn measure_timing_pattern<S>(img: &PreparedImage<S>, caps: &CapStoneGroup) -> usize
+where
+    S: ImageBuffer,
+{
     const US: [f64; 3] = [6.5f64, 6.5f64, 0.5f64];
     const VS: [f64; 3] = [0.5f64, 6.5f64, 6.5f64];
     let tpet0 = caps.0.c.map(US[0], VS[0]);
@@ -211,11 +217,10 @@ fn measure_timing_pattern<S>(
     ver * 4 + 17
 }
 
-fn timing_scan<S>(
-    img: &PreparedImage<S>,
-    p0: &Point,
-    p1: &Point,
-) -> usize where S: ImageBuffer {
+fn timing_scan<S>(img: &PreparedImage<S>, p0: &Point, p1: &Point) -> usize
+where
+    S: ImageBuffer,
+{
     let mut run_length = 0;
     let mut count = 0;
     for p in geometry::BresenhamScan::new(p0, p1) {
@@ -233,8 +238,15 @@ fn timing_scan<S>(
     count
 }
 
-
-fn find_alignment_pattern<S>(img: &mut PreparedImage<S>, mut align_seed: Point, c0: &CapStone, c2: &CapStone) -> Option<Point> where S: ImageBuffer {
+fn find_alignment_pattern<S>(
+    img: &mut PreparedImage<S>,
+    mut align_seed: Point,
+    c0: &CapStone,
+    c2: &CapStone,
+) -> Option<Point>
+where
+    S: ImageBuffer,
+{
     /* Guess another two corners of the alignment pattern so that we
      * can estimate its size.
      */
@@ -242,8 +254,9 @@ fn find_alignment_pattern<S>(img: &mut PreparedImage<S>, mut align_seed: Point, 
     let a = c0.c.map(u, v + 1.0);
     let (u, v) = c2.c.unmap(&align_seed);
     let c = c2.c.map(u + 1.0, v);
-    let size_estimate = ((a.x - align_seed.x) * -(c.y - align_seed.y) +
-        (a.y - align_seed.y) * (c.x - align_seed.x)).abs() as usize;
+    let size_estimate = ((a.x - align_seed.x) * -(c.y - align_seed.y)
+        + (a.y - align_seed.y) * (c.x - align_seed.x))
+        .unsigned_abs() as usize;
 
     /* Spiral outwards from the estimate point until we find something
      * roughly the right size. Don't look too far from the estimate
@@ -260,18 +273,16 @@ fn find_alignment_pattern<S>(img: &mut PreparedImage<S>, mut align_seed: Point, 
             let y = align_seed.y as usize;
 
             // Alignment pattern should not be white
-            if x < img.width() && y < img.height() {
-                if PixelColor::White != img.get_pixel_at(x, y) {
-                    let region = img.get_region((x, y));
-                    let count = match region {
-                        ColoredRegion::Unclaimed { pixel_count, .. } => pixel_count,
-                        _ => continue,
-                    };
+            if x < img.width() && y < img.height() && PixelColor::White != img.get_pixel_at(x, y) {
+                let region = img.get_region((x, y));
+                let count = match region {
+                    ColoredRegion::Unclaimed { pixel_count, .. } => pixel_count,
+                    _ => continue,
+                };
 
-                    // Matches expected size of alignment pattern
-                    if count >= size_estimate / 2 && count <= size_estimate * 2 {
-                        return Some(align_seed);
-                    }
+                // Matches expected size of alignment pattern
+                if count >= size_estimate / 2 && count <= size_estimate * 2 {
+                    return Some(align_seed);
                 }
             }
 
@@ -313,8 +324,14 @@ impl AreaFiller for LeftMostFinder {
     }
 }
 
-
-fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Perspective, grid_size: usize) -> geometry::Perspective where S: ImageBuffer {
+fn jiggle_perspective<S>(
+    img: &PreparedImage<S>,
+    mut perspective: geometry::Perspective,
+    grid_size: usize,
+) -> geometry::Perspective
+where
+    S: ImageBuffer,
+{
     let mut best = fitness_all(img, &perspective, grid_size);
     let mut adjustments: [f64; 8] = [
         perspective.0[0] * 0.02f64,
@@ -324,7 +341,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
         perspective.0[4] * 0.02f64,
         perspective.0[5] * 0.02f64,
         perspective.0[6] * 0.02f64,
-        perspective.0[7] * 0.02f64
+        perspective.0[7] * 0.02f64,
     ];
 
     for _pass in 0..5 {
@@ -333,11 +350,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
             let old = perspective.0[j];
             let step = adjustments[j];
 
-            let new = if i & 1 != 0 {
-                old + step
-            } else {
-                old - step
-            };
+            let new = if i & 1 != 0 { old + step } else { old - step };
 
             perspective.0[j] = new;
             let test = fitness_all(img, &perspective, grid_size);
@@ -348,6 +361,7 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
             }
         }
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..8 {
             adjustments[i] *= 0.5f64;
         }
@@ -358,7 +372,14 @@ fn jiggle_perspective<S>(img: &PreparedImage<S>, mut perspective: geometry::Pers
  * transform, using the features we expect to find by scanning the
  * grid.
  */
-fn fitness_all<S>(img: &PreparedImage<S>, perspective: &geometry::Perspective, grid_size: usize) -> i32 where S: ImageBuffer {
+fn fitness_all<S>(
+    img: &PreparedImage<S>,
+    perspective: &geometry::Perspective,
+    grid_size: usize,
+) -> i32
+where
+    S: ImageBuffer,
+{
     let version = version_from_grid_size(grid_size);
     let info = &VERSION_DATA_BASE[version];
     let mut score = 0;
@@ -397,9 +418,11 @@ fn fitness_apat<S>(
     perspective: &geometry::Perspective,
     cx: i32,
     cy: i32,
-) -> i32 where S: ImageBuffer {
-    fitness_cell(img, perspective, cx, cy)
-        - fitness_ring(img, perspective, cx, cy, 1)
+) -> i32
+where
+    S: ImageBuffer,
+{
+    fitness_cell(img, perspective, cx, cy) - fitness_ring(img, perspective, cx, cy, 1)
         + fitness_ring(img, perspective, cx, cy, 2)
 }
 
@@ -409,7 +432,10 @@ fn fitness_ring<S>(
     cx: i32,
     cy: i32,
     radius: i32,
-) -> i32 where S: ImageBuffer {
+) -> i32
+where
+    S: ImageBuffer,
+{
     let mut score = 0;
     for i in 0..(radius * 2) {
         score += fitness_cell(img, perspective, cx - radius + i, cy - radius);
@@ -425,13 +451,18 @@ fn fitness_cell<S>(
     perspective: &geometry::Perspective,
     x: i32,
     y: i32,
-) -> i32 where S: ImageBuffer {
+) -> i32
+where
+    S: ImageBuffer,
+{
     const OFFSETS: [f64; 3] = [0.3f64, 0.5f64, 0.7f64];
     let mut score = 0;
+    #[allow(clippy::needless_range_loop)]
     for v in 0..3 {
         for u in 0..3 {
             let p = perspective.map(x as f64 + OFFSETS[u], y as f64 + OFFSETS[v]);
-            if !(p.y < 0 || p.y as usize >= img.height() || p.x < 0 || p.x as usize >= img.width()) {
+            if !(p.y < 0 || p.y as usize >= img.height() || p.x < 0 || p.x as usize >= img.width())
+            {
                 if PixelColor::White != img.get_pixel_at_point(p) {
                     score += 1
                 } else {
@@ -443,15 +474,16 @@ fn fitness_cell<S>(
     score
 }
 
-
 fn fitness_capstone<S>(
     img: &PreparedImage<S>,
     perspective: &geometry::Perspective,
     x: i32,
     y: i32,
-) -> i32 where S: ImageBuffer {
-    fitness_cell(img, perspective, x + 3, y + 3)
-        + fitness_ring(img, perspective, x + 3, y + 3, 1)
+) -> i32
+where
+    S: ImageBuffer,
+{
+    fitness_cell(img, perspective, x + 3, y + 3) + fitness_ring(img, perspective, x + 3, y + 3, 1)
         - fitness_ring(img, perspective, x + 3, y + 3, 2)
         + fitness_ring(img, perspective, x + 3, y + 3, 3)
 }

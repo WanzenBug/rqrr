@@ -3,8 +3,8 @@ use std::mem;
 
 use g2p::{g2p, GaloisField};
 
-use crate::{DeQRError, DeQRResult, BitGrid};
 use crate::version_db::{RSParameters, VERSION_DATA_BASE};
+use crate::{BitGrid, DeQRError, DeQRResult};
 
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
@@ -29,14 +29,14 @@ impl Version {
 
     /// Return the size of a grid of the given version
     pub fn to_size(&self) -> usize {
-        self.0 as usize * 4 + 17
+        self.0 * 4 + 17
     }
 }
 
 /// MetaData for a QR grid
 ///
-/// Stores information about the size/version of given grid. Also contains information about the
-/// error correction level and bit mask used.
+/// Stores information about the size/version of given grid. Also contains
+/// information about the error correction level and bit mask used.
 #[derive(Debug, Clone, Copy)]
 pub struct MetaData {
     /// The version/size of the grid
@@ -116,10 +116,13 @@ pub struct DataStream {
 
 /// Given a grid try to decode and write it to the output writer
 ///
-/// This tries to read the bit patterns from a [Grid](trait.Grid.html), correct errors
-/// and/or missing bits and write the result to the output. If successful also returns
-/// [MetaData](struct.MetaData.html) of the read grid.
-pub fn decode<W>(code: &dyn BitGrid, writer: W) -> DeQRResult<MetaData> where W: Write {
+/// This tries to read the bit patterns from a [Grid](trait.Grid.html), correct
+/// errors and/or missing bits and write the result to the output. If successful
+/// also returns [MetaData](struct.MetaData.html) of the read grid.
+pub fn decode<W>(code: &dyn BitGrid, writer: W) -> DeQRResult<MetaData>
+where
+    W: Write,
+{
     let meta = read_format(code)?;
     let raw = read_data(code, &meta);
     let stream = codestream_ecc(&meta, raw)?;
@@ -128,12 +131,10 @@ pub fn decode<W>(code: &dyn BitGrid, writer: W) -> DeQRResult<MetaData> where W:
     Ok(meta)
 }
 
-
-fn decode_payload<W>(
-    meta: &MetaData,
-    mut ds: CorrectedDataStream,
-    mut writer: W,
-) -> DeQRResult<()> where W: Write {
+fn decode_payload<W>(meta: &MetaData, mut ds: CorrectedDataStream, mut writer: W) -> DeQRResult<()>
+where
+    W: Write,
+{
     while ds.bits_remaining() >= 4 {
         let ty = ds.take_bits(4);
         match ty {
@@ -143,19 +144,16 @@ fn decode_payload<W>(
             4 => decode_byte(meta, &mut ds, &mut writer),
             8 => decode_kanji(meta, &mut ds, &mut writer),
             7 => decode_eci(meta, &mut ds, &mut writer),
-            _ => {
-                Err(DeQRError::UnknownDataType)?
-            }
+            _ => Err(DeQRError::UnknownDataType)?,
         }?;
     }
     Ok(())
 }
 
-fn decode_eci<W>(
-    _meta: &MetaData,
-    ds: &mut CorrectedDataStream,
-    mut _writer: W,
-) -> DeQRResult<()> where W: Write {
+fn decode_eci<W>(_meta: &MetaData, ds: &mut CorrectedDataStream, mut _writer: W) -> DeQRResult<()>
+where
+    W: Write,
+{
     if ds.bits_remaining() < 8 {
         Err(DeQRError::DataUnderflow)?
     }
@@ -176,11 +174,10 @@ fn decode_eci<W>(
     Ok(())
 }
 
-fn decode_kanji<W>(
-    meta: &MetaData,
-    ds: &mut CorrectedDataStream,
-    mut writer: W,
-) -> DeQRResult<()> where W: Write {
+fn decode_kanji<W>(meta: &MetaData, ds: &mut CorrectedDataStream, mut writer: W) -> DeQRResult<()>
+where
+    W: Write,
+{
     let nbits = match meta.version {
         Version(0..=9) => 8,
         Version(10..=26) => 10,
@@ -203,39 +200,38 @@ fn decode_kanji<W>(
         } else {
             (intermediate + 0xc140) as u16
         };
-        writer.write_all(&[(sjw >> 8) as u8, (sjw & 0xff) as u8]).map_err(|_| DeQRError::IoError)?;
-    }
-    Ok(())
-}
-
-fn decode_byte<W>(
-    meta: &MetaData,
-    ds: &mut CorrectedDataStream,
-    mut writer: W,
-) -> DeQRResult<()> where W: Write {
-    let nbits = match meta.version {
-        Version(0..=9) => 8,
-        _ => 16
-    };
-
-    let count = ds.take_bits(nbits);
-    if ds.bits_remaining() < count * 8 {
-        return Err(DeQRError::DataUnderflow)?;
-    }
-
-    for _ in 0..count {
-        let buf = &[ds.take_bits(8) as u8];
-        writer.write_all(buf)
+        writer
+            .write_all(&[(sjw >> 8) as u8, (sjw & 0xff) as u8])
             .map_err(|_| DeQRError::IoError)?;
     }
     Ok(())
 }
 
-fn decode_alpha<W>(
-    meta: &MetaData,
-    ds: &mut CorrectedDataStream,
-    mut writer: W,
-) -> DeQRResult<()> where W: Write {
+fn decode_byte<W>(meta: &MetaData, ds: &mut CorrectedDataStream, mut writer: W) -> DeQRResult<()>
+where
+    W: Write,
+{
+    let nbits = match meta.version {
+        Version(0..=9) => 8,
+        _ => 16,
+    };
+
+    let count = ds.take_bits(nbits);
+    if ds.bits_remaining() < count * 8 {
+        Err(DeQRError::DataUnderflow)?;
+    }
+
+    for _ in 0..count {
+        let buf = &[ds.take_bits(8) as u8];
+        writer.write_all(buf).map_err(|_| DeQRError::IoError)?;
+    }
+    Ok(())
+}
+
+fn decode_alpha<W>(meta: &MetaData, ds: &mut CorrectedDataStream, mut writer: W) -> DeQRResult<()>
+where
+    W: Write,
+{
     let nbits = match meta.version {
         Version(0..=9) => 9,
         Version(10..=26) => 11,
@@ -246,14 +242,14 @@ fn decode_alpha<W>(
 
     while count >= 2 {
         alpha_tuple(&mut buf, ds, 11, 2)?;
-        writer.write_all(&buf[..])
-            .map_err(|_| DeQRError::IoError)?;
+        writer.write_all(&buf[..]).map_err(|_| DeQRError::IoError)?;
         count -= 2;
     }
 
     if count == 1 {
         alpha_tuple(&mut buf, ds, 6, 1)?;
-        writer.write_all(&buf[..1])
+        writer
+            .write_all(&buf[..1])
             .map_err(|_| DeQRError::IoError)?;
     }
 
@@ -279,11 +275,10 @@ fn alpha_tuple(
     }
 }
 
-fn decode_numeric<W>(
-    meta: &MetaData,
-    ds: &mut CorrectedDataStream,
-    mut writer: W,
-) -> DeQRResult<()> where W: Write {
+fn decode_numeric<W>(meta: &MetaData, ds: &mut CorrectedDataStream, mut writer: W) -> DeQRResult<()>
+where
+    W: Write,
+{
     let nbits = match meta.version {
         Version(0..=9) => 10,
         Version(10..=26) => 12,
@@ -294,20 +289,21 @@ fn decode_numeric<W>(
     let mut buf = [0; 3];
     while count >= 3 {
         numeric_tuple(&mut buf, ds, 10, 3)?;
-        writer.write_all(&buf[..])
-            .map_err(|_| DeQRError::IoError)?;
+        writer.write_all(&buf[..]).map_err(|_| DeQRError::IoError)?;
         count -= 3;
     }
 
     if count == 2 {
         numeric_tuple(&mut buf, ds, 7, 2)?;
-        writer.write_all(&buf[..2])
+        writer
+            .write_all(&buf[..2])
             .map_err(|_| DeQRError::IoError)?;
         count -= 2;
     }
     if count == 1 {
         numeric_tuple(&mut buf, ds, 4, 1)?;
-        writer.write_all(&buf[..1])
+        writer
+            .write_all(&buf[..1])
             .map_err(|_| DeQRError::IoError)?;
     }
 
@@ -332,17 +328,14 @@ fn numeric_tuple(
     }
 }
 
-fn codestream_ecc(
-    meta: &MetaData,
-    ds: RawData,
-) -> DeQRResult<CorrectedDataStream> {
+fn codestream_ecc(meta: &MetaData, ds: RawData) -> DeQRResult<CorrectedDataStream> {
     let mut out = CorrectedDataStream {
         data: [0; MAX_PAYLOAD_SIZE],
         ptr: 0,
         bit_len: 0,
     };
 
-    let ver = &VERSION_DATA_BASE[meta.version.0 as usize];
+    let ver = &VERSION_DATA_BASE[meta.version.0];
     let sb_ecc = &ver.ecc[meta.ecc_level as usize];
     let lb_ecc = RSParameters {
         bs: sb_ecc.bs + 1,
@@ -356,13 +349,10 @@ fn codestream_ecc(
 
     let mut dst_offset = 0;
     for i in 0..bc {
-        let ecc = if i < sb_ecc.ns {
-            sb_ecc
-        } else {
-            &lb_ecc
-        };
+        let ecc = if i < sb_ecc.ns { sb_ecc } else { &lb_ecc };
         let dst = &mut out.data[dst_offset..(dst_offset + ecc.bs)];
         let num_ec = ecc.bs - ecc.dw;
+        #[allow(clippy::needless_range_loop)]
         for j in 0..ecc.dw {
             dst[j] = ds.data[j * bc + i];
         }
@@ -378,10 +368,7 @@ fn codestream_ecc(
     Ok(out)
 }
 
-fn correct_block(
-    block: &mut [u8],
-    ecc: &RSParameters,
-) -> DeQRResult<()> {
+fn correct_block(block: &mut [u8], ecc: &RSParameters) -> DeQRResult<()> {
     assert!(ecc.bs > ecc.dw);
 
     let npar = ecc.bs - ecc.dw;
@@ -400,11 +387,7 @@ fn correct_block(
     }
 
     /* Compute error evaluator polynomial */
-    let omega = eloc_poly(
-        &s,
-        &sigma,
-        npar - 1,
-    );
+    let omega = eloc_poly(&s, &sigma, npar - 1);
 
     /* Find error locations and magnitudes */
     for i in 0..ecc.bs {
@@ -430,13 +413,11 @@ fn correct_block(
  *
  * Generator polynomial for GF(2^8) is x^8 + x^4 + x^3 + x^2 + 1
  */
-fn block_syndromes(
-    block: &[u8],
-    npar: usize,
-) -> Result<[GF256; 64], [GF256; 64]> {
+fn block_syndromes(block: &[u8], npar: usize) -> Result<[GF256; 64], [GF256; 64]> {
     let mut nonzero: bool = false;
     let mut s = [GF256::ZERO; 64];
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..npar {
         for j in 0..block.len() {
             let c = GF256(block[block.len() - 1 - j]);
@@ -453,14 +434,14 @@ fn block_syndromes(
     }
 }
 
-
-fn poly_eval<G>(
-    s: &[G; 64],
-    x: G,
-) -> G where G: GaloisField {
+fn poly_eval<G>(s: &[G; 64], x: G) -> G
+where
+    G: GaloisField,
+{
     let mut sum = G::ZERO;
     let mut x_pow = G::ONE;
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..64 {
         sum += s[i] * x_pow;
         x_pow *= x;
@@ -468,11 +449,7 @@ fn poly_eval<G>(
     sum
 }
 
-fn eloc_poly(
-    s: &[GF256; 64],
-    sigma: &[GF256; 64],
-    npar: usize,
-) -> [GF256; 64] {
+fn eloc_poly(s: &[GF256; 64], sigma: &[GF256; 64], npar: usize) -> [GF256; 64] {
     let mut omega = [GF256::ZERO; 64];
     for i in 0..npar {
         let a = sigma[i];
@@ -486,10 +463,10 @@ fn eloc_poly(
 /* ***********************************************************************
  * Berlekamp-Massey algorithm for finding error locator polynomials.
  */
-fn berlekamp_massey<G>(
-    s: &[G; 64],
-    n: usize,
-) -> [G; 64] where G: GaloisField {
+fn berlekamp_massey<G>(s: &[G; 64], n: usize) -> [G; 64]
+where
+    G: GaloisField,
+{
     let mut ts: [G; 64] = [G::ZERO; 64];
     let mut cs: [G; 64] = [G::ZERO; 64];
     let mut bs: [G; 64] = [G::ZERO; 64];
@@ -529,16 +506,15 @@ fn berlekamp_massey<G>(
 /* ***********************************************************************
  * Polynomial operations
  */
-fn poly_add<G>(
-    dst: &mut [G; 64],
-    src: &[G; 64],
-    c: G,
-    shift: usize,
-) -> () where G: GaloisField {
+fn poly_add<G>(dst: &mut [G; 64], src: &[G; 64], c: G, shift: usize)
+where
+    G: GaloisField,
+{
     if c == G::ZERO {
         return;
     }
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..64 {
         let p = i + shift;
         if p >= 64 {
@@ -549,10 +525,7 @@ fn poly_add<G>(
     }
 }
 
-fn read_data(
-    code: &dyn BitGrid,
-    meta: &MetaData,
-) -> RawData {
+fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
     let mut ds = RawData::new();
 
     let mut y = code.size() - 1;
@@ -590,12 +563,7 @@ fn read_data(
     ds
 }
 
-fn read_bit(
-    code: &dyn BitGrid,
-    meta: &MetaData,
-    y: usize,
-    x: usize,
-) -> bool {
+fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize) -> bool {
     let mut v = code.bit(y, x) as u8;
     if mask_bit(meta.mask, y, x) {
         v ^= 1
@@ -603,11 +571,7 @@ fn read_bit(
     v != 0
 }
 
-fn mask_bit(
-    mask: u16,
-    y: usize,
-    x: usize,
-) -> bool {
+fn mask_bit(mask: u16, y: usize, x: usize) -> bool {
     match mask {
         0 => 0 == (y + x) % 2,
         1 => 0 == y % 2,
@@ -621,11 +585,7 @@ fn mask_bit(
     }
 }
 
-fn reserved_cell(
-    version: Version,
-    i: usize,
-    j: usize,
-) -> bool {
+fn reserved_cell(version: Version, i: usize, j: usize) -> bool {
     let ver = &VERSION_DATA_BASE[version.0];
     let size = version.0 * 4 + 17;
 
@@ -654,6 +614,7 @@ fn reserved_cell(
      * the timing pattern.
      */
     if version.0 >= 7 {
+        #[allow(clippy::if_same_then_else)]
         if i < 6 && j + 11 >= size {
             return true;
         } else if i + 11 >= size && j < 6 {
@@ -696,8 +657,8 @@ fn correct_format(mut word: u16) -> DeQRResult<u16> {
     /* Evaluate U (received codeword) at each of alpha_1 .. alpha_6
      * to get S_1 .. S_6 (but we index them from 0).
      */
-    if let Err(mut s) = format_syndromes(word) {
-        let sigma = berlekamp_massey(&mut s, 6);
+    if let Err(s) = format_syndromes(word) {
+        let sigma = berlekamp_massey(&s, 6);
 
         /* Now, find the roots of the polynomial */
         for i in 0..15 {
@@ -707,8 +668,7 @@ fn correct_format(mut word: u16) -> DeQRResult<u16> {
         }
 
         // Double CHECK syndromes
-        format_syndromes(word)
-            .map_err(|_| DeQRError::FormatEcc)?;
+        format_syndromes(word).map_err(|_| DeQRError::FormatEcc)?;
     }
     Ok(word)
 }
@@ -717,19 +677,14 @@ fn read_format(code: &dyn BitGrid) -> DeQRResult<MetaData> {
     let mut format = 0;
 
     // Try first location
-    const XS: [usize; 15] = [
-        8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0
-    ];
-    const YS: [usize; 15] = [
-        0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8
-    ];
+    const XS: [usize; 15] = [8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0];
+    const YS: [usize; 15] = [0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8];
     for i in (0..15).rev() {
         format = (format << 1) | code.bit(YS[i], XS[i]) as u16;
     }
     format ^= 0x5412;
 
-
-// Check format, try other location if needed
+    // Check format, try other location if needed
     let verified_format = correct_format(format).or_else(|_| {
         let mut format = 0;
         for i in 0..7 {
@@ -762,6 +717,7 @@ fn format_syndromes(u: u16) -> Result<[GF16; 64], [GF16; 64]> {
     let mut result = [GF16(0); 64];
     let mut nonzero = false;
 
+    #[allow(clippy::needless_range_loop)]
     for i in 0..6 {
         for j in 0..15 {
             if u & (1 << j) != 0 {
@@ -787,13 +743,13 @@ mod tests {
     #[test]
     fn test_mask_0() {
         let test = [
-            [1, 0, 1, 0, 1, 0, 1, ],
-            [0, 1, 0, 1, 0, 1, 0, ],
-            [1, 0, 1, 0, 1, 0, 1, ],
-            [0, 1, 0, 1, 0, 1, 0, ],
-            [1, 0, 1, 0, 1, 0, 1, ],
-            [0, 1, 0, 1, 0, 1, 0, ],
-            [1, 0, 1, 0, 1, 0, 1, ],
+            [1, 0, 1, 0, 1, 0, 1],
+            [0, 1, 0, 1, 0, 1, 0],
+            [1, 0, 1, 0, 1, 0, 1],
+            [0, 1, 0, 1, 0, 1, 0],
+            [1, 0, 1, 0, 1, 0, 1],
+            [0, 1, 0, 1, 0, 1, 0],
+            [1, 0, 1, 0, 1, 0, 1],
         ];
 
         for x in 0..7 {
@@ -806,13 +762,13 @@ mod tests {
     #[test]
     fn test_mask_1() {
         let test = [
-            [1, 1, 1, 1, 1, 1, 1, ],
-            [0, 0, 0, 0, 0, 0, 0, ],
-            [1, 1, 1, 1, 1, 1, 1, ],
-            [0, 0, 0, 0, 0, 0, 0, ],
-            [1, 1, 1, 1, 1, 1, 1, ],
-            [0, 0, 0, 0, 0, 0, 0, ],
-            [1, 1, 1, 1, 1, 1, 1, ],
+            [1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1],
         ];
 
         for x in 0..7 {
@@ -825,13 +781,13 @@ mod tests {
     #[test]
     fn test_mask_2() {
         let test = [
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
         ];
 
         for x in 0..7 {
@@ -844,13 +800,13 @@ mod tests {
     #[test]
     fn test_mask_3() {
         let test = [
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [0, 0, 1, 0, 0, 1, 0, ],
-            [0, 1, 0, 0, 1, 0, 0, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [0, 0, 1, 0, 0, 1, 0, ],
-            [0, 1, 0, 0, 1, 0, 0, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
+            [1, 0, 0, 1, 0, 0, 1],
+            [0, 0, 1, 0, 0, 1, 0],
+            [0, 1, 0, 0, 1, 0, 0],
+            [1, 0, 0, 1, 0, 0, 1],
+            [0, 0, 1, 0, 0, 1, 0],
+            [0, 1, 0, 0, 1, 0, 0],
+            [1, 0, 0, 1, 0, 0, 1],
         ];
 
         for x in 0..7 {
@@ -863,13 +819,13 @@ mod tests {
     #[test]
     fn test_mask_4() {
         let test = [
-            [1, 1, 1, 0, 0, 0, 1, ],
-            [1, 1, 1, 0, 0, 0, 1, ],
-            [0, 0, 0, 1, 1, 1, 0, ],
-            [0, 0, 0, 1, 1, 1, 0, ],
-            [1, 1, 1, 0, 0, 0, 1, ],
-            [1, 1, 1, 0, 0, 0, 1, ],
-            [0, 0, 0, 1, 1, 1, 0, ],
+            [1, 1, 1, 0, 0, 0, 1],
+            [1, 1, 1, 0, 0, 0, 1],
+            [0, 0, 0, 1, 1, 1, 0],
+            [0, 0, 0, 1, 1, 1, 0],
+            [1, 1, 1, 0, 0, 0, 1],
+            [1, 1, 1, 0, 0, 0, 1],
+            [0, 0, 0, 1, 1, 1, 0],
         ];
 
         for x in 0..7 {
@@ -882,13 +838,13 @@ mod tests {
     #[test]
     fn test_mask_5() {
         let test = [
-            [1, 1, 1, 1, 1, 1, 1, ],
-            [1, 0, 0, 0, 0, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 1, 0, 1, 0, 1, ],
-            [1, 0, 0, 1, 0, 0, 1, ],
-            [1, 0, 0, 0, 0, 0, 1, ],
-            [1, 1, 1, 1, 1, 1, 1, ],
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 0, 1, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1],
         ];
 
         for x in 0..7 {
@@ -901,13 +857,13 @@ mod tests {
     #[test]
     fn test_mask_6() {
         let test = [
-            [1, 1, 1, 1, 1, 1, 1, ],
-            [1, 1, 1, 0, 0, 0, 1, ],
-            [1, 1, 0, 1, 1, 0, 1, ],
-            [1, 0, 1, 0, 1, 0, 1, ],
-            [1, 0, 1, 1, 0, 1, 1, ],
-            [1, 0, 0, 0, 1, 1, 1, ],
-            [1, 1, 1, 1, 1, 1, 1, ],
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 0, 0, 0, 1],
+            [1, 1, 0, 1, 1, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 1, 0, 1, 1],
+            [1, 0, 0, 0, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1],
         ];
 
         for x in 0..7 {
@@ -920,13 +876,13 @@ mod tests {
     #[test]
     fn test_mask_7() {
         let test = [
-            [1, 0, 1, 0, 1, 0, 1, ],
-            [0, 0, 0, 1, 1, 1, 0, ],
-            [1, 0, 0, 0, 1, 1, 1, ],
-            [0, 1, 0, 1, 0, 1, 0, ],
-            [1, 1, 1, 0, 0, 0, 1, ],
-            [0, 1, 1, 1, 0, 0, 0, ],
-            [1, 0, 1, 0, 1, 0, 1, ],
+            [1, 0, 1, 0, 1, 0, 1],
+            [0, 0, 0, 1, 1, 1, 0],
+            [1, 0, 0, 0, 1, 1, 1],
+            [0, 1, 0, 1, 0, 1, 0],
+            [1, 1, 1, 0, 0, 0, 1],
+            [0, 1, 1, 1, 0, 0, 0],
+            [1, 0, 1, 0, 1, 0, 1],
         ];
 
         for x in 0..7 {

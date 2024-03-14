@@ -1,9 +1,3 @@
-use criterion;
-use criterion::{criterion_group, criterion_main};
-use image;
-
-use rqrr;
-
 //fn bench_find_caps(c: &mut criterion::Criterion) {
 //    let img = include_bytes!("../src/test_data/art_small.png");
 //    let img = image::load_from_memory(img).unwrap().to_luma();
@@ -20,6 +14,4 @@ use rqrr;
 //criterion_group!(benches, bench_find_caps);
 //criterion_main!(benches);
 
-fn main() {
-
-}
+fn main() {}
