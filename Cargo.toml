@@ -2,7 +2,7 @@
 name = "rqrr"
 edition = "2021"
 rust-version = "1.74.0"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["WanzenBug <moritz@wanzenbug.xyz>"]
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/rqrr/"
