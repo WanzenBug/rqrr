@@ -1,6 +1,7 @@
 [package]
 name = "rqrr"
-edition = "2018"
+edition = "2021"
+rust-version = "1.67.1"
 version = "0.6.0"
 authors = ["WanzenBug <moritz@wanzenbug.xyz>"]
 license = "MIT OR Apache-2.0"
@@ -28,10 +29,10 @@ required-features = ["img"]
 harness = false
 
 [dev-dependencies]
-criterion = "0.4"
-image = { version = "0.24" }
+criterion = "0.5"
+image = { version = "0.25" }
 
 [dependencies]
 g2p = "1.0"
-lru = "0.9"
-image = { version = "0.24", optional = true, default-features = false }
+lru = "0.12"
+image = { version = "0.25", optional = true, default-features = false }
