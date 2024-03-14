@@ -23,20 +23,23 @@ impl Perspective {
 
         c[0] = (x1 * (x2 * y3 - x3 * y2)
             + x0 * (-x2 * y3 + x3 * y2 + (x2 - x3) * y1)
-            + x1 * (x3 - x2) * y0) / wden;
+            + x1 * (x3 - x2) * y0)
+            / wden;
         c[1] = -(x0 * (x2 * y3 + x1 * (y2 - y3) - x2 * y1) - x1 * x3 * y2
             + x2 * x3 * y1
-            + (x1 * x3 - x2 * x3) * y0) / hden;
+            + (x1 * x3 - x2 * x3) * y0)
+            / hden;
         c[2] = x0;
         c[3] = (y0 * (x1 * (y3 - y2) - x2 * y3 + x3 * y2)
             + y1 * (x2 * y3 - x3 * y2)
-            + x0 * y1 * (y2 - y3)) / wden;
+            + x0 * y1 * (y2 - y3))
+            / wden;
         c[4] = (x0 * (y1 * y3 - y2 * y3) + x1 * y2 * y3 - x2 * y1 * y3
-            + y0 * (x3 * y2 - x1 * y2 + (x2 - x3) * y1)) / hden;
+            + y0 * (x3 * y2 - x1 * y2 + (x2 - x3) * y1))
+            / hden;
         c[5] = y0;
         c[6] = (x1 * (y3 - y2) + x0 * (y2 - y3) + (x2 - x3) * y1 + (x3 - x2) * y0) / wden;
-        c[7] =
-            (-x2 * y3 + x1 * y3 + x3 * y2 + x0 * (y1 - y2) - x3 * y1 + (x2 - x1) * y0) / hden;
+        c[7] = (-x2 * y3 + x1 * y3 + x3 * y2 + x0 * (y1 - y2) - x3 * y1 + (x2 - x1) * y0) / hden;
 
         Some(Perspective(c))
     }
@@ -69,21 +72,18 @@ impl Perspective {
             - self.0[1] * self.0[3];
         let u = -(self.0[1] * (y - self.0[5]) - self.0[2] * self.0[7] * y
             + (self.0[5] * self.0[7] - self.0[4]) * x
-            + self.0[2] * self.0[4]) / den;
+            + self.0[2] * self.0[4])
+            / den;
         let v = (self.0[0] * (y - self.0[5]) - self.0[2] * self.0[6] * y
             + (self.0[5] * self.0[6] - self.0[3]) * x
-            + self.0[2] * self.0[3]) / den;
+            + self.0[2] * self.0[3])
+            / den;
 
         (u, v)
     }
 }
 
-pub fn line_intersect(
-    p0: &Point,
-    p1: &Point,
-    q0: &Point,
-    q1: &Point,
-) -> Option<Point> {
+pub fn line_intersect(p0: &Point, p1: &Point, q0: &Point, q1: &Point) -> Option<Point> {
     /* (a, b) is perpendicular to line p */
     let a = -(p1.y - p0.y);
     let b = p1.x - p0.x;
@@ -138,17 +138,9 @@ impl BresenhamScan {
             (false, n, d)
         };
 
-        let (n, non_step) = if n < 0 {
-            (-n, -1)
-        } else {
-            (n, 1)
-        };
+        let (n, non_step) = if n < 0 { (-n, -1) } else { (n, 1) };
 
-        let (d, dom_step) = if d < 0 {
-            (-d, -1)
-        } else {
-            (d, 1)
-        };
+        let (d, dom_step) = if d < 0 { (-d, -1) } else { (d, 1) };
 
         BresenhamScan {
             x,
@@ -180,7 +172,7 @@ impl Iterator for BresenhamScan {
         self.a += self.n;
         let (dom, non) = match (self.x_dom, &mut self.x, &mut self.y) {
             (true, x, y) => (x, y),
-            (false, x, y) => (y, x)
+            (false, x, y) => (y, x),
         };
 
         *dom += self.dom_step;
@@ -199,20 +191,11 @@ mod tests {
 
     #[test]
     fn test_bresenham_straight() {
-        let middle = Point {
-            x: 100,
-            y: 100,
-        };
+        let middle = Point { x: 100, y: 100 };
 
-        let up = Point {
-            x: 100,
-            y: 200,
-        };
+        let up = Point { x: 100, y: 200 };
 
-        let right = Point {
-            x: 300,
-            y: 100,
-        };
+        let right = Point { x: 300, y: 100 };
 
         let scan_up = BresenhamScan::new(&middle, &up);
         for (i, p) in scan_up.enumerate() {
@@ -241,13 +224,10 @@ mod tests {
 
     #[test]
     fn test_bresenham_zero() {
-        let start = Point {
-            x: 37,
-            y: 45,
-        };
+        let start = Point { x: 37, y: 45 };
 
         let mut scan = BresenhamScan::new(&start, &start);
-        assert_eq!(scan.next(), Some(Point { x: 37, y: 45}));
+        assert_eq!(scan.next(), Some(Point { x: 37, y: 45 }));
         assert_eq!(scan.next(), None)
     }
 
@@ -255,28 +235,22 @@ mod tests {
     fn test_bresenham_major_x() {
         // Taken from https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 
-        let start = Point {
-            x: 1,
-            y: 1,
-        };
-        let end = Point {
-            x: 11,
-            y: 5,
-        };
+        let start = Point { x: 1, y: 1 };
+        let end = Point { x: 11, y: 5 };
 
         let mut scan = BresenhamScan::new(&start, &end);
 
-        assert_eq!(scan.next(), Some(Point { x: 1, y: 1}));
-        assert_eq!(scan.next(), Some(Point { x: 2, y: 1}));
-        assert_eq!(scan.next(), Some(Point { x: 3, y: 2}));
-        assert_eq!(scan.next(), Some(Point { x: 4, y: 2}));
-        assert_eq!(scan.next(), Some(Point { x: 5, y: 3}));
-        assert_eq!(scan.next(), Some(Point { x: 6, y: 3}));
-        assert_eq!(scan.next(), Some(Point { x: 7, y: 3}));
-        assert_eq!(scan.next(), Some(Point { x: 8, y: 4}));
-        assert_eq!(scan.next(), Some(Point { x: 9, y: 4}));
-        assert_eq!(scan.next(), Some(Point { x: 10, y: 5}));
-        assert_eq!(scan.next(), Some(Point { x: 11, y: 5}));
+        assert_eq!(scan.next(), Some(Point { x: 1, y: 1 }));
+        assert_eq!(scan.next(), Some(Point { x: 2, y: 1 }));
+        assert_eq!(scan.next(), Some(Point { x: 3, y: 2 }));
+        assert_eq!(scan.next(), Some(Point { x: 4, y: 2 }));
+        assert_eq!(scan.next(), Some(Point { x: 5, y: 3 }));
+        assert_eq!(scan.next(), Some(Point { x: 6, y: 3 }));
+        assert_eq!(scan.next(), Some(Point { x: 7, y: 3 }));
+        assert_eq!(scan.next(), Some(Point { x: 8, y: 4 }));
+        assert_eq!(scan.next(), Some(Point { x: 9, y: 4 }));
+        assert_eq!(scan.next(), Some(Point { x: 10, y: 5 }));
+        assert_eq!(scan.next(), Some(Point { x: 11, y: 5 }));
         assert_eq!(scan.next(), None);
     }
 
@@ -284,83 +258,64 @@ mod tests {
     fn test_bresenham_major_y() {
         // Taken from https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
 
-        let start = Point {
-            x: 5,
-            y: 11,
-        };
-        let end = Point {
-            x: 1,
-            y: 1,
-        };
+        let start = Point { x: 5, y: 11 };
+        let end = Point { x: 1, y: 1 };
 
         let mut scan = BresenhamScan::new(&start, &end);
 
-        assert_eq!(scan.next(), Some(Point { x: 5, y: 11}));
-        assert_eq!(scan.next(), Some(Point { x: 5, y: 10}));
-        assert_eq!(scan.next(), Some(Point { x: 4, y: 9}));
-        assert_eq!(scan.next(), Some(Point { x: 4, y: 8}));
-        assert_eq!(scan.next(), Some(Point { x: 3, y: 7}));
-        assert_eq!(scan.next(), Some(Point { x: 3, y: 6}));
-        assert_eq!(scan.next(), Some(Point { x: 3, y: 5}));
-        assert_eq!(scan.next(), Some(Point { x: 2, y: 4}));
-        assert_eq!(scan.next(), Some(Point { x: 2, y: 3}));
-        assert_eq!(scan.next(), Some(Point { x: 1, y: 2}));
-        assert_eq!(scan.next(), Some(Point { x: 1, y: 1}));
+        assert_eq!(scan.next(), Some(Point { x: 5, y: 11 }));
+        assert_eq!(scan.next(), Some(Point { x: 5, y: 10 }));
+        assert_eq!(scan.next(), Some(Point { x: 4, y: 9 }));
+        assert_eq!(scan.next(), Some(Point { x: 4, y: 8 }));
+        assert_eq!(scan.next(), Some(Point { x: 3, y: 7 }));
+        assert_eq!(scan.next(), Some(Point { x: 3, y: 6 }));
+        assert_eq!(scan.next(), Some(Point { x: 3, y: 5 }));
+        assert_eq!(scan.next(), Some(Point { x: 2, y: 4 }));
+        assert_eq!(scan.next(), Some(Point { x: 2, y: 3 }));
+        assert_eq!(scan.next(), Some(Point { x: 1, y: 2 }));
+        assert_eq!(scan.next(), Some(Point { x: 1, y: 1 }));
         assert_eq!(scan.next(), None);
     }
 
     #[test]
     fn test_line_intersect_parallel() {
-        let p0 = Point {
-            x: 0,
-            y: 0,
-        };
+        let p0 = Point { x: 0, y: 0 };
 
-        let p1 = Point {
-            x: 0,
-            y: 10,
-        };
+        let p1 = Point { x: 0, y: 10 };
 
-        let q0 = Point {
-            x: 1,
-            y: 1,
-        };
+        let q0 = Point { x: 1, y: 1 };
 
-        let q1 = Point {
-            x: 1,
-            y: -9
-        };
+        let q1 = Point { x: 1, y: -9 };
 
         assert_eq!(line_intersect(&p0, &p1, &q0, &q1), None)
     }
 
     #[test]
     fn test_line_intersect_values() {
-        let p0 = Point {
-            x: 0,
-            y: 0,
-        };
+        let p0 = Point { x: 0, y: 0 };
 
-        let p1 = Point {
-            x: 0,
-            y: 10,
-        };
+        let p1 = Point { x: 0, y: 10 };
 
-        let q0 = Point {
-            x: 1,
-            y: 1,
-        };
+        let q0 = Point { x: 1, y: 1 };
 
-        let q1 = Point {
-            x: 10,
-            y: -9
-        };
-
+        let q1 = Point { x: 10, y: -9 };
 
         // Check that all permutations produce same result
-        assert_eq!(line_intersect(&p0, &p1, &q0, &q1), Some(Point { x: 0, y: 2 }));
-        assert_eq!(line_intersect(&p0, &p1, &q1, &q0), Some(Point { x: 0, y: 2 }));
-        assert_eq!(line_intersect(&p1, &p0, &q0, &q1), Some(Point { x: 0, y: 2 }));
-        assert_eq!(line_intersect(&p1, &p0, &q1, &q0), Some(Point { x: 0, y: 2 }));
+        assert_eq!(
+            line_intersect(&p0, &p1, &q0, &q1),
+            Some(Point { x: 0, y: 2 })
+        );
+        assert_eq!(
+            line_intersect(&p0, &p1, &q1, &q0),
+            Some(Point { x: 0, y: 2 })
+        );
+        assert_eq!(
+            line_intersect(&p1, &p0, &q0, &q1),
+            Some(Point { x: 0, y: 2 })
+        );
+        assert_eq!(
+            line_intersect(&p1, &p0, &q1, &q0),
+            Some(Point { x: 0, y: 2 })
+        );
     }
 }

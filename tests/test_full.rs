@@ -1,7 +1,4 @@
-use rqrr;
-use image;
 use std::collections::HashSet;
-
 
 #[test]
 fn test_full_time() {
@@ -25,7 +22,9 @@ fn test_full_time() {
 
 #[test]
 fn test_full_large_version() {
-    let gif = image::open("tests/data/full/superlong.gif").unwrap().to_luma8();
+    let gif = image::open("tests/data/full/superlong.gif")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = rqrr::PreparedImage::prepare(gif);
     let grids = search_img.detect_grids();

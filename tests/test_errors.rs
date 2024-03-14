@@ -1,12 +1,16 @@
-use rqrr::{PreparedImage, DeQRError};
-use image;
-use std::io::{Write, Error, ErrorKind};
+use rqrr::{DeQRError, PreparedImage};
+
+use std::io::{Error, ErrorKind, Write};
 
 struct BrokenWriter {}
 
 impl Write for BrokenWriter {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
-        println!("Writer got this data: {:?} (decoded: {:?})", buf, String::from_utf8_lossy(buf));
+        println!(
+            "Writer got this data: {:?} (decoded: {:?})",
+            buf,
+            String::from_utf8_lossy(buf)
+        );
         Err(Error::new(ErrorKind::PermissionDenied, "testing IoError"))
     }
     fn flush(&mut self) -> Result<(), Error> {
@@ -17,7 +21,9 @@ impl Write for BrokenWriter {
 
 #[test]
 fn test_io_error() {
-    let img = image::open("tests/data/errors/io_error.png").unwrap().to_luma8();
+    let img = image::open("tests/data/errors/io_error.png")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
@@ -30,12 +36,13 @@ fn test_io_error() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_eq!(err, DeQRError::IoError);
-
 }
 
 #[test]
 fn test_invalid_version() {
-    let img = image::open("tests/data/errors/invalid_version.gif").unwrap().to_luma8();
+    let img = image::open("tests/data/errors/invalid_version.gif")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
@@ -50,7 +57,9 @@ fn test_invalid_version() {
 
 #[test]
 fn test_format_ecc() {
-    let img = image::open("tests/data/errors/format_ecc.png").unwrap().to_luma8();
+    let img = image::open("tests/data/errors/format_ecc.png")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
@@ -66,7 +75,9 @@ fn test_format_ecc() {
 
 #[test]
 fn test_data_ecc() {
-    let img = image::open("tests/data/errors/data_ecc.png").unwrap().to_luma8();
+    let img = image::open("tests/data/errors/data_ecc.png")
+        .unwrap()
+        .to_luma8();
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
@@ -102,7 +113,8 @@ fn test_should_not_panic() {
 // - InvalidGridSize
 // - EncodingError
 
-// Also, these errors require grids to be manipulated at a deep level, which requires involved knowledge of the QR code structure:
+// Also, these errors require grids to be manipulated at a deep level, which
+// requires involved knowledge of the QR code structure:
 // - DataUnderflow
 // - DataOverflow
 // - UnknownDataType
