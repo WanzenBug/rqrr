@@ -412,6 +412,9 @@ fn correct_block(
         if poly_eval(&sigma, xinv) == GF256::ZERO {
             let sd_x = poly_eval(&sigma_deriv, xinv);
             let omega_x = poly_eval(&omega, xinv);
+            if sd_x == GF256::ZERO {
+                return Err(DeQRError::DataEcc);
+            }
             let error = omega_x / sd_x;
             block[ecc.bs - i - 1] = (GF256(block[ecc.bs - i - 1]) + error).0;
         }
