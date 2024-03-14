@@ -4,32 +4,36 @@
 //! QR-Codes in images and decode them.
 //!
 //!
-//! # Usage
-//! The most basic usage is shown below:
-//!
-//! ```rust
-//! use image;
-//!
-//! # fn main() -> Result<(), Box<dyn ::std::error::Error>> {
-//! // Load on image to search, convert it to grayscale
-//! let img = image::open("tests/data/github.gif")?.to_luma8();
-//! // Prepare for detection
-//! let mut img = rqrr::PreparedImage::prepare(img);
-//! // Search for grids, without decoding
-//! let grids = img.detect_grids();
-//! assert_eq!(grids.len(), 1);
-//! // Decode the grid
-//! let (meta, content) = grids[0].decode()?;
-//! assert_eq!(meta.ecc_level, 0);
-//! assert_eq!(content, "https://github.com/WanzenBug/rqrr");
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! If you have some other form of picture storage, you can use
-//! [`PreparedImage::prepare_from_*`](struct.PreparedImage.html). This allows
-//! you define your own source for images.
+#![cfg_attr(
+    feature = "img",
+    doc = r##"
+# Usage
+The most basic usage is shown below:
 
+```rust
+use image;
+
+# fn main() -> Result<(), Box<dyn ::std::error::Error>> {
+// Load on image to search, convert it to grayscale
+let img = image::open("tests/data/github.gif")?.to_luma8();
+// Prepare for detection
+let mut img = rqrr::PreparedImage::prepare(img);
+// Search for grids, without decoding
+let grids = img.detect_grids();
+assert_eq!(grids.len(), 1);
+// Decode the grid
+let (meta, content) = grids[0].decode()?;
+assert_eq!(meta.ecc_level, 0);
+assert_eq!(content, "https://github.com/WanzenBug/rqrr");
+# Ok(())
+# }
+```
+
+If you have some other form of picture storage, you can use
+[`PreparedImage::prepare_from_*`](struct.PreparedImage.html). This allows
+you to define your own source for images.
+"##
+)]
 pub use self::decode::{MetaData, Version};
 pub(crate) use self::detect::{capstones_from_image, CapStone};
 pub use self::identify::Point;

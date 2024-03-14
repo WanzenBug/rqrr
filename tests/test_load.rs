@@ -1,3 +1,5 @@
+#![cfg(feature = "img")]
+
 use rqrr::{BitGrid, PreparedImage};
 
 fn test_data(buffer: &[u8]) -> PreparedImage<image::GrayImage> {

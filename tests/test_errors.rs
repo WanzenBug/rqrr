@@ -1,3 +1,5 @@
+#![cfg(feature = "img")]
+
 use rqrr::{DeQRError, PreparedImage};
 
 use std::io::{Error, ErrorKind, Write};

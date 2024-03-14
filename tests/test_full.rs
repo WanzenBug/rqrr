@@ -1,3 +1,5 @@
+#![cfg(feature = "img")]
+
 use std::collections::HashSet;
 
 #[test]
