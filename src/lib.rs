@@ -34,7 +34,7 @@ If you have some other form of picture storage, you can use
 you to define your own source for images.
 "##
 )]
-pub use self::decode::{MetaData, Version};
+pub use self::decode::{MetaData, RawData, Version, MAX_PAYLOAD_SIZE};
 pub(crate) use self::detect::{capstones_from_image, CapStone};
 pub use self::identify::Point;
 pub(crate) use self::identify::SkewedGridLocation;
@@ -92,6 +92,14 @@ where
         let meta = self.decode_to(&mut out)?;
         let out = String::from_utf8(out)?;
         Ok((meta, out))
+    }
+
+    /// Try to read metadata, and return the raw, uncorrected bit stream.
+    ///
+    /// If successful, returns the metadata along with the raw bit pattern.
+    /// The raw data is still masked, so bits appear as in the source image.
+    pub fn get_raw_data(&self) -> DeQRResult<(MetaData, RawData)> {
+        crate::decode::get_raw(&self.grid)
     }
 
     /// Try to decode the grid.

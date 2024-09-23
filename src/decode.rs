@@ -9,7 +9,7 @@ use crate::{BitGrid, DeQRError, DeQRResult};
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
-const MAX_PAYLOAD_SIZE: usize = 8896;
+pub const MAX_PAYLOAD_SIZE: usize = 8896;
 
 /// Version of a QR Code which determines its size
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -47,20 +47,17 @@ pub struct MetaData {
     pub mask: u16,
 }
 
+/// The bit stream contained in the QR Code
 #[derive(Clone)]
 pub struct RawData {
-    data: [u8; MAX_PAYLOAD_SIZE],
-    len: usize,
+    /// The bits of the QR Code
+    pub data: [u8; MAX_PAYLOAD_SIZE],
+    /// Length of the bit stream in bits.
+    pub len: usize,
 }
 
 impl RawData {
-    pub fn new() -> Self {
-        RawData {
-            data: [0; MAX_PAYLOAD_SIZE],
-            len: 0,
-        }
-    }
-
+    /// Push a new bit into the bit stream
     pub fn push(&mut self, bit: bool) {
         assert!((self.len >> 8) < MAX_PAYLOAD_SIZE);
         let bitpos = (self.len & 7) as u8;
@@ -99,6 +96,7 @@ impl CorrectedDataStream {
             }
             self.ptr += 1;
         }
+
         ret
     }
 }
@@ -113,11 +111,18 @@ where
     W: Write,
 {
     let meta = read_format(code)?;
-    let raw = read_data(code, &meta);
+    let raw = read_data(code, &meta, true);
     let stream = codestream_ecc(&meta, raw)?;
     decode_payload(&meta, stream, writer)?;
 
     Ok(meta)
+}
+
+/// Return extracted metadata and the raw, uncorrected bit stream
+pub fn get_raw(code: &dyn BitGrid) -> DeQRResult<(MetaData, RawData)> {
+    let meta = read_format(code)?;
+    let raw = read_data(code, &meta, false);
+    Ok((meta, raw))
 }
 
 fn decode_payload<W>(meta: &MetaData, mut ds: CorrectedDataStream, mut writer: W) -> DeQRResult<()>
@@ -514,8 +519,12 @@ where
     }
 }
 
-fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
-    let mut ds = RawData::new();
+/// Reads the code in the "zigzag" pattern, optionally removing the mask
+fn read_data(code: &dyn BitGrid, meta: &MetaData, remove_mask: bool) -> RawData {
+    let mut ds = RawData {
+        data: [0; MAX_PAYLOAD_SIZE],
+        len: 0,
+    };
 
     let mut y = code.size() - 1;
     let mut x = code.size() - 1;
@@ -526,10 +535,10 @@ fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
             x -= 1;
         }
         if !reserved_cell(meta.version, y, x) {
-            ds.push(read_bit(code, meta, y, x));
+            ds.push(read_bit(code, meta, y, x, remove_mask));
         }
         if !reserved_cell(meta.version, y, x - 1) {
-            ds.push(read_bit(code, meta, y, x - 1));
+            ds.push(read_bit(code, meta, y, x - 1, remove_mask));
         }
 
         let (new_y, new_neg_dir) = match (y, neg_dir) {
@@ -552,11 +561,14 @@ fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
     ds
 }
 
-fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize) -> bool {
+// The read_bit() function can optionally consider the mask.
+// This allows bits to be read as they appear "physically" in the QR code or with the mask removed, reflecting the actual code.
+fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize, remove_mask: bool) -> bool {
     let mut v = code.bit(y, x) as u8;
-    if mask_bit(meta.mask, y, x) {
+    if remove_mask && mask_bit(meta.mask, y, x) {
         v ^= 1
     }
+
     v != 0
 }
 
