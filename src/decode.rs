@@ -9,7 +9,7 @@ use crate::{BitGrid, DeQRError, DeQRResult};
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
-const MAX_PAYLOAD_SIZE: usize = 8896;
+pub const MAX_PAYLOAD_SIZE: usize = 8896;
 
 /// Version of a QR Code which determines its size
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
