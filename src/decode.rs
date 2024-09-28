@@ -10,7 +10,7 @@ use crate::{BitGrid, DeQRError, DeQRResult};
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
-pub const MAX_PAYLOAD_SIZE: usize = 8896;
+const MAX_PAYLOAD_SIZE: usize = 8896;
 
 /// Version of a QR Code which determines its size
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -27,7 +27,7 @@ impl Version {
             Err(DeQRError::InvalidVersion)
         }
     }
-    pub fn sjafdbsvfj(){}
+
     /// Return the size of a grid of the given version
     pub fn to_size(&self) -> usize {
         self.0 * 4 + 17
@@ -52,7 +52,7 @@ pub struct MetaData {
 #[derive(Clone)]
 pub struct RawData {
     pub data: [u8; MAX_PAYLOAD_SIZE],
-    pub len: usize,
+    len: usize,
 }
 
 impl RawData {
