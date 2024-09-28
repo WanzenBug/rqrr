@@ -123,8 +123,7 @@ where
     Ok(meta)
 }
 
-//This method was not in the original repo
-//decode() does 2 steps and doesnt expose the raw data that we need
+//Getter method that extracts the raw data of a QR Code
 pub fn get_raw(code: &dyn BitGrid) -> DeQRResult<(MetaData ,RawData)>{
     let meta = read_format(code)?;
     let raw = read_data(code, &meta, false);
@@ -525,6 +524,7 @@ where
     }
 }
 
+//Reads the code in the "zigzag" pattern
 fn read_data(code: &dyn BitGrid, meta: &MetaData, remove_mask: bool) -> RawData {
     let mut ds = RawData::new();
 
@@ -559,13 +559,12 @@ fn read_data(code: &dyn BitGrid, meta: &MetaData, remove_mask: bool) -> RawData 
         y = new_y;
         neg_dir = new_neg_dir;
     }
-    
+
     ds
 }
 
-// read_bit() has the option to take the mask in consideration
-// Reading the secret Code requires the modules to be read as is,
-// while scanning for the actual code, should remove the mask
+// The read_bit() function can optionally consider the mask.
+// This allows bits to be read as they appear "physically" in the QR code or with the mask removed, reflecting the actual code.
 fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize, remove_mask: bool) -> bool {
     let mut v = code.bit(y, x) as u8;
     if remove_mask {
