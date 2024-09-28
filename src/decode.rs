@@ -6,6 +6,7 @@ use g2p::{g2p, GaloisField};
 use crate::version_db::{RSParameters, VERSION_DATA_BASE};
 use crate::{BitGrid, DeQRError, DeQRResult};
 
+
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
@@ -26,12 +27,13 @@ impl Version {
             Err(DeQRError::InvalidVersion)
         }
     }
-
+    pub fn sjafdbsvfj(){}
     /// Return the size of a grid of the given version
     pub fn to_size(&self) -> usize {
         self.0 * 4 + 17
     }
 }
+
 
 /// MetaData for a QR grid
 ///
@@ -49,8 +51,8 @@ pub struct MetaData {
 
 #[derive(Clone)]
 pub struct RawData {
-    data: [u8; MAX_PAYLOAD_SIZE],
-    len: usize,
+    pub data: [u8; MAX_PAYLOAD_SIZE],
+    pub len: usize,
 }
 
 impl RawData {
@@ -99,6 +101,7 @@ impl CorrectedDataStream {
             }
             self.ptr += 1;
         }
+
         ret
     }
 }
@@ -113,11 +116,19 @@ where
     W: Write,
 {
     let meta = read_format(code)?;
-    let raw = read_data(code, &meta);
+    let raw = read_data(code, &meta, true);
     let stream = codestream_ecc(&meta, raw)?;
     decode_payload(&meta, stream, writer)?;
 
     Ok(meta)
+}
+
+//This method was not in the original repo
+//decode() does 2 steps and doesnt expose the raw data that we need
+pub fn get_raw(code: &dyn BitGrid) -> DeQRResult<(MetaData ,RawData)>{
+    let meta = read_format(code)?;
+    let raw = read_data(code, &meta, false);
+    Ok((meta, raw))
 }
 
 fn decode_payload<W>(meta: &MetaData, mut ds: CorrectedDataStream, mut writer: W) -> DeQRResult<()>
@@ -514,7 +525,7 @@ where
     }
 }
 
-fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
+fn read_data(code: &dyn BitGrid, meta: &MetaData, remove_mask: bool) -> RawData {
     let mut ds = RawData::new();
 
     let mut y = code.size() - 1;
@@ -526,10 +537,10 @@ fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
             x -= 1;
         }
         if !reserved_cell(meta.version, y, x) {
-            ds.push(read_bit(code, meta, y, x));
+            ds.push(read_bit(code, meta, y, x, remove_mask));
         }
         if !reserved_cell(meta.version, y, x - 1) {
-            ds.push(read_bit(code, meta, y, x - 1));
+            ds.push(read_bit(code, meta, y, x - 1, remove_mask));
         }
 
         let (new_y, new_neg_dir) = match (y, neg_dir) {
@@ -548,15 +559,21 @@ fn read_data(code: &dyn BitGrid, meta: &MetaData) -> RawData {
         y = new_y;
         neg_dir = new_neg_dir;
     }
-
+    
     ds
 }
 
-fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize) -> bool {
+// read_bit() has the option to take the mask in consideration
+// Reading the secret Code requires the modules to be read as is,
+// while scanning for the actual code, should remove the mask
+fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize, remove_mask: bool) -> bool {
     let mut v = code.bit(y, x) as u8;
-    if mask_bit(meta.mask, y, x) {
-        v ^= 1
+    if remove_mask {
+        if mask_bit(meta.mask, y, x) {
+            v ^= 1
+        }
     }
+
     v != 0
 }
 
@@ -573,6 +590,7 @@ fn mask_bit(mask: u16, y: usize, x: usize) -> bool {
         _ => panic!("Unknown mask value"),
     }
 }
+
 
 fn reserved_cell(version: Version, i: usize, j: usize) -> bool {
     let ver = &VERSION_DATA_BASE[version.0];
