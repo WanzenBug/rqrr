@@ -1,5 +1,5 @@
 [package]
-name = "rqrr-altered"
+name = "rqrr_altered"
 edition = "2021"
 rust-version = "1.74.0"
 version = "0.7.2"
