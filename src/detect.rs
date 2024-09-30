@@ -24,13 +24,6 @@ pub struct CapStone {
     pub c: Perspective,
 }
 
-#[derive(Debug, Clone)]
-pub struct PolygonScoreData {
-    pub ref_0: Point,
-    pub scores: [i32; 4],
-    pub corners: [Point; 4],
-}
-
 /// Find all 'capstones' in a given image.
 ///
 /// A Capstones is the locator pattern of a QR code. Every QR code has 3 of

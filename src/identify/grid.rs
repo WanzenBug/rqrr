@@ -16,8 +16,6 @@ use crate::{
 /// normal [Grid](trait.Grid.html) that can be decoded.
 #[derive(Debug, Clone)]
 pub struct SkewedGridLocation {
-    pub caps: [CapStone; 3],
-    pub align: Point,
     pub grid_size: usize,
     pub c: geometry::Perspective,
 }
@@ -101,11 +99,8 @@ impl SkewedGridLocation {
         }
 
         let c = setup_perspective(img, &group, align, grid_size)?;
-        let caps = [group.0, group.1, group.2];
 
         Some(SkewedGridLocation {
-            align,
-            caps,
             grid_size,
             c,
         })

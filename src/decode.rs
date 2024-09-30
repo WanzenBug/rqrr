@@ -103,17 +103,6 @@ impl CorrectedDataStream {
     }
 }
 
-/* ***********************************************************************
- * Decoder algorithm
- */
-#[derive(Copy, Clone)]
-pub struct DataStream {
-    pub raw: [u8; MAX_PAYLOAD_SIZE],
-    pub data_bits: usize,
-    pub ptr: usize,
-    pub data: [u8; MAX_PAYLOAD_SIZE],
-}
-
 /// Given a grid try to decode and write it to the output writer
 ///
 /// This tries to read the bit patterns from a [Grid](trait.Grid.html), correct
