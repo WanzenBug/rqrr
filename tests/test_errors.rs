@@ -1,6 +1,6 @@
 #![cfg(feature = "img")]
 
-use rqrr_altered::{DeQRError, PreparedImage};
+use rqrr::{DeQRError, PreparedImage};
 
 use std::io::{Error, ErrorKind, Write};
 

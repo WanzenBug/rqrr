@@ -5,10 +5,6 @@
 This crates exports functions and types that can be used to search for QR-Codes in images and
 decode them.
 
-# Attention
-This is a fork of rqrr by WanzenBug, which is extended in such a way to offer Methods
-of extracting raw data of QR-Codes.
-
 ## Usage
 The most basic usage is shown below:
 
