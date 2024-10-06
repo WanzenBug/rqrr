@@ -6,7 +6,6 @@ use g2p::{g2p, GaloisField};
 use crate::version_db::{RSParameters, VERSION_DATA_BASE};
 use crate::{BitGrid, DeQRError, DeQRResult};
 
-
 g2p!(GF16, 4, modulus: 0b1_0011);
 g2p!(GF256, 8, modulus: 0b1_0001_1101);
 
@@ -34,7 +33,6 @@ impl Version {
     }
 }
 
-
 /// MetaData for a QR grid
 ///
 /// Stores information about the size/version of given grid. Also contains
@@ -53,6 +51,12 @@ pub struct MetaData {
 pub struct RawData {
     pub data: [u8; MAX_PAYLOAD_SIZE],
     len: usize,
+}
+
+impl Default for RawData {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RawData {
@@ -124,7 +128,7 @@ where
 }
 
 //Getter method that extracts the raw data of a QR Code
-pub fn get_raw(code: &dyn BitGrid) -> DeQRResult<(MetaData ,RawData)>{
+pub fn get_raw(code: &dyn BitGrid) -> DeQRResult<(MetaData, RawData)> {
     let meta = read_format(code)?;
     let raw = read_data(code, &meta, false);
     Ok((meta, raw))
@@ -567,10 +571,8 @@ fn read_data(code: &dyn BitGrid, meta: &MetaData, remove_mask: bool) -> RawData 
 // This allows bits to be read as they appear "physically" in the QR code or with the mask removed, reflecting the actual code.
 fn read_bit(code: &dyn BitGrid, meta: &MetaData, y: usize, x: usize, remove_mask: bool) -> bool {
     let mut v = code.bit(y, x) as u8;
-    if remove_mask {
-        if mask_bit(meta.mask, y, x) {
-            v ^= 1
-        }
+    if remove_mask && mask_bit(meta.mask, y, x) {
+        v ^= 1
     }
 
     v != 0
@@ -589,7 +591,6 @@ fn mask_bit(mask: u16, y: usize, x: usize) -> bool {
         _ => panic!("Unknown mask value"),
     }
 }
-
 
 fn reserved_cell(version: Version, i: usize, j: usize) -> bool {
     let ver = &VERSION_DATA_BASE[version.0];

@@ -100,10 +100,7 @@ impl SkewedGridLocation {
 
         let c = setup_perspective(img, &group, align, grid_size)?;
 
-        Some(SkewedGridLocation {
-            grid_size,
-            c,
-        })
+        Some(SkewedGridLocation { grid_size, c })
     }
 
     /// Convert into a grid referencing the underlying image as source

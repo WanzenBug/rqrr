@@ -34,7 +34,7 @@ If you have some other form of picture storage, you can use
 you to define your own source for images.
 "##
 )]
-pub use self::decode::{MetaData, Version, RawData};
+pub use self::decode::{MetaData, RawData, Version};
 pub(crate) use self::detect::{capstones_from_image, CapStone};
 pub use self::identify::Point;
 pub(crate) use self::identify::SkewedGridLocation;
@@ -94,7 +94,7 @@ where
         Ok((meta, out))
     }
 
-    pub fn get_raw_data(&self) -> DeQRResult<(MetaData, RawData)>{
+    pub fn get_raw_data(&self) -> DeQRResult<(MetaData, RawData)> {
         crate::decode::get_raw(&self.grid)
     }
 
