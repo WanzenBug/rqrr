@@ -14,7 +14,7 @@ struct Neighbor {
 pub fn find_and_rank_possible_neighbors(capstones: &[CapStone], idx: usize) -> Vec<(usize, usize)> {
     const VIABILITY_THRESHOLD: f64 = 0.25;
 
-    let (hlist, vlist) = find_possible_neighbors(&capstones, idx);
+    let (hlist, vlist) = find_possible_neighbors(capstones, idx);
     let mut res = Vec::new();
     struct NeighborSet {
         score: f64,
