@@ -1,5 +1,5 @@
 pub use self::grid::SkewedGridLocation;
-pub use self::match_capstones::find_groupings;
+pub use self::match_capstones::find_and_rank_possible_neighbors;
 
 pub mod grid;
 pub mod match_capstones;

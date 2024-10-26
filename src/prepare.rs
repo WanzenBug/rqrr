@@ -1,5 +1,6 @@
 use std::{cmp, num::NonZeroUsize};
 
+use crate::identify::match_capstones::CapStoneGroup;
 use crate::identify::Point;
 use lru::LruCache;
 
@@ -223,10 +224,17 @@ where
         }
     }
 
-    pub fn detect_grids(&mut self) -> Vec<crate::Grid<crate::identify::grid::RefGridImage<S>>> {
+    /// Group [CapStones](struct.CapStone.html) into [Grids](struct.Grid.html)
+    /// that are likely QR codes
+    ///
+    /// Return a vector of Grids
+    pub fn detect_grids(&mut self) -> Vec<crate::Grid<crate::identify::grid::RefGridImage<S>>>
+    where
+        S: Clone,
+    {
         let mut res = Vec::new();
         let stones = crate::capstones_from_image(self);
-        let groups = crate::identify::find_groupings(stones);
+        let groups = self.find_groupings(stones);
         let locations: Vec<_> = groups
             .into_iter()
             .filter_map(|v| crate::SkewedGridLocation::from_group(self, v))
@@ -250,6 +258,50 @@ where
         }
 
         res
+    }
+
+    /// Find CapStones that form a grid
+    ///
+    /// By trying to match up the relative perspective of 3
+    /// [CapStones](struct.CapStone.html) along with other criteria we can find the
+    /// CapStones that corner the same QR code.
+    fn find_groupings(&mut self, capstones: Vec<crate::CapStone>) -> Vec<CapStoneGroup>
+    where
+        S: Clone,
+    {
+        let mut used_capstones = Vec::new();
+        let mut groups = Vec::new();
+        for idx in 0..capstones.len() {
+            if used_capstones.contains(&idx) {
+                continue;
+            }
+            let pairs = crate::identify::find_and_rank_possible_neighbors(&capstones, idx);
+            for pair in pairs {
+                if used_capstones.contains(&pair.0) || used_capstones.contains(&pair.1) {
+                    continue;
+                }
+                let group_under_test = CapStoneGroup(
+                    capstones[pair.0].clone(),
+                    capstones[idx].clone(),
+                    capstones[pair.1].clone(),
+                );
+                // Confirm that this group has the other requirements of a QR code.
+                // A copy of the input image is used to not contaminate the
+                // original on an incorrect set of CapStones
+                let mut image_copy = self.clone();
+                if crate::SkewedGridLocation::from_group(&mut image_copy, group_under_test.clone())
+                    .is_none()
+                {
+                    continue;
+                }
+                // This is a viable set, save this grouping
+                groups.push(group_under_test);
+                used_capstones.push(pair.0);
+                used_capstones.push(idx);
+                used_capstones.push(pair.1);
+            }
+        }
+        groups
     }
 
     pub fn without_preparation(buf: S) -> Self {

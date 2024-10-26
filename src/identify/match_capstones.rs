@@ -9,63 +9,44 @@ struct Neighbor {
     distance: f64,
 }
 
-/// Find CapStones that form a grid
-///
-/// By trying to match up the relative perspective of 3
-/// [CapStones](struct.CapStone.html) we can find those that corner the same QR
-/// code.
-pub fn find_groupings(mut capstones: Vec<CapStone>) -> Vec<CapStoneGroup> {
-    let mut idx = 0;
-    let mut groups = Vec::new();
-    while idx < capstones.len() {
-        let (hlist, vlist) = find_possible_neighbors(&capstones, idx);
-        match test_neighbours(&hlist, &vlist) {
-            None => idx += 1,
-            Some((h_idx, v_idx)) => {
-                let group = remove_capstones_in_order(&mut capstones, h_idx, idx, v_idx);
-                groups.push(group);
+/// Return each pair Capstone indexes that are likely to be from a QR code
+/// Ordered from most symmetric to least symmetric
+pub fn find_and_rank_possible_neighbors(capstones: &[CapStone], idx: usize) -> Vec<(usize, usize)> {
+    const VIABILITY_THRESHOLD: f64 = 0.25;
 
-                // Update index for items removed
-                let sub = [h_idx, v_idx].iter().filter(|&&i| i < idx).count();
-                idx -= sub;
+    let (hlist, vlist) = find_possible_neighbors(capstones, idx);
+    let mut res = Vec::new();
+    struct NeighborSet {
+        score: f64,
+        h_index: usize,
+        v_index: usize,
+    }
+    /* Test each possible grouping */
+    for hn in hlist {
+        for vn in vlist.iter() {
+            let score = {
+                if hn.distance < vn.distance {
+                    (1.0f64 - hn.distance / vn.distance).abs()
+                } else {
+                    (1.0f64 - vn.distance / hn.distance).abs()
+                }
+            };
+            if score < VIABILITY_THRESHOLD {
+                res.push(NeighborSet {
+                    score,
+                    h_index: hn.index,
+                    v_index: vn.index,
+                });
             }
         }
     }
 
-    groups
-}
-
-fn remove_capstones_in_order(
-    caps: &mut Vec<CapStone>,
-    first: usize,
-    second: usize,
-    third: usize,
-) -> CapStoneGroup {
-    assert_ne!(first, second);
-    assert_ne!(first, third);
-    assert_ne!(second, third);
-
-    let idx0 = first;
-    let mut idx1 = second;
-    let mut idx2 = third;
-
-    if second > first {
-        idx1 -= 1;
-    }
-
-    if third > first {
-        idx2 -= 1;
-    }
-
-    if third > second {
-        idx2 -= 1;
-    }
-
-    let first_cap = caps.remove(idx0);
-    let second_cap = caps.remove(idx1);
-    let third_cap = caps.remove(idx2);
-
-    CapStoneGroup(first_cap, second_cap, third_cap)
+    res.sort_unstable_by(|a, b| {
+        (a.score)
+            .partial_cmp(&(b.score))
+            .expect("Neighbor distance should never cause a div by 0")
+    });
+    res.iter().map(|n| (n.h_index, n.v_index)).collect()
 }
 
 fn find_possible_neighbors(capstones: &[CapStone], idx: usize) -> (Vec<Neighbor>, Vec<Neighbor>) {
@@ -104,36 +85,4 @@ fn find_possible_neighbors(capstones: &[CapStone], idx: usize) -> (Vec<Neighbor>
     }
 
     (hlist, vlist)
-}
-
-fn test_neighbours(hlist: &[Neighbor], vlist: &[Neighbor]) -> Option<(usize, usize)> {
-    // Worse scores will be ignored anyway
-    let mut best_score = 2.5;
-    let mut best_h = None;
-    let mut best_v = None;
-    /* Test each possible grouping */
-    for hn in hlist {
-        for vn in vlist {
-            let score = (1.0f64 - hn.distance / vn.distance).abs();
-
-            if score > 2.5 {
-                continue;
-            }
-
-            let new = match (best_h, score) {
-                (None, _) => (Some(hn.index), Some(vn.index), score),
-                (Some(_), b) if b < best_score => (Some(hn.index), Some(vn.index), b),
-                _ => (best_h, best_v, best_score),
-            };
-
-            best_h = new.0;
-            best_v = new.1;
-            best_score = new.2;
-        }
-    }
-
-    match (best_h, best_v) {
-        (None, _) | (_, None) => None,
-        (Some(h), Some(v)) => Some((h, v)),
-    }
 }
