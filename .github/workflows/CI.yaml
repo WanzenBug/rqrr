@@ -17,7 +17,7 @@ jobs:
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
         toolchain:
-          - 1.74.0 # MSRV
+          - 1.64.0 # MSRV
           - stable
           - nightly
         include:
@@ -37,6 +37,7 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Run tests
         run: cargo test --target ${{ matrix.target }}
+        if: ${{ matrix.toolchain != '1.64.0' }} # MSRV only needs default features
       - name: Run tests (no default features)
         run: cargo test --target ${{ matrix.target }} --no-default-features
 
