@@ -187,7 +187,7 @@ where
         let d = ds.take_bits(13);
         let ms_b = d / 0xc0;
         let ls_b = d % 0xc0;
-        let intermediate = ms_b << 8 | ls_b;
+        let intermediate = (ms_b << 8) | ls_b;
         let sjw = if intermediate + 0x8140 <= 0x9ffc {
             /* bytes are in the range 0x8140 to 0x9FFC */
             (intermediate + 0x8140) as u16
