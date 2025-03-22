@@ -280,9 +280,9 @@ checksum = "f81ec6369c545a7d40e4589b5597581fa1c441fe1cce96dd1de43159910a36a2"
 
 [[package]]
 name = "g2gen"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39a8e3a10ca47bce6c3f36b5ed98a08636806e07793390a5bce8c2cab2eee309"
+checksum = "f427bd33d3ac842e28df36ad53e0f65dfdecef71c8efba3d45bac558bd492d4c"
 dependencies = [
  "g2poly",
  "proc-macro2",
@@ -292,9 +292,9 @@ dependencies = [
 
 [[package]]
 name = "g2p"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bce512b75277aca7d5e1a9efa4d2966b29b5da602af3e29a65e14dc210274ae"
+checksum = "786c757f429f9fbeef86584a518888b4238026a028e17221680387d6835d6e58"
 dependencies = [
  "g2gen",
  "g2poly",
@@ -302,9 +302,9 @@ dependencies = [
 
 [[package]]
 name = "g2poly"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feebd4c1b1833bea3876ecc7c2f84520818f86de7b4c3b82e064f68ea1d8cdaa"
+checksum = "d53ad4e910118ad68e539841851fef66ed659da8d27bef6fabd6f0e390c25844"
 
 [[package]]
 name = "getrandom"
