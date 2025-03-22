@@ -127,7 +127,7 @@ pub struct RefGridImage<'a, S> {
     img: &'a PreparedImage<S>,
 }
 
-impl<'a, S> BitGrid for RefGridImage<'a, S>
+impl<S> BitGrid for RefGridImage<'_, S>
 where
     S: ImageBuffer,
 {
