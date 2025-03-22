@@ -35,9 +35,9 @@ harness = false
 
 [dev-dependencies]
 #criterion = "0.5"
-image = { version = "0.25" }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif"] }
 
 [dependencies]
 g2p = "1.0"
 lru = "0.12"
-image = { version = "0.25", optional = true, default-features = false }
+image = { version = "0.24", optional = true, default-features = false }

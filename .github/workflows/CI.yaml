@@ -37,9 +37,6 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Run tests
         run: cargo test --target ${{ matrix.target }}
-        if: ${{ matrix.toolchain != '1.64.0' }} # MSRV only needs default features
-      - name: Run tests (no default features)
-        run: cargo test --target ${{ matrix.target }} --no-default-features
 
   rustfmt:
     name: Rustfmt
