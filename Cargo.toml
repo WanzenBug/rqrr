@@ -16,7 +16,12 @@ categories = [
     "graphics",
     "encoding",
 ]
-
+include = [
+    "/README.md",
+    "/LICENSE-*",
+    "/src/**/*.rs",
+    "/src/**/*.png",
+]
 
 [features]
 img = ["image"]
@@ -29,7 +34,7 @@ required-features = ["img"]
 harness = false
 
 [dev-dependencies]
-criterion = "0.5"
+#criterion = "0.5"
 image = { version = "0.25" }
 
 [dependencies]
