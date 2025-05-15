@@ -110,6 +110,15 @@ fn test_should_not_panic() {
     let _ = search_img.detect_grids();
 }
 
+#[test]
+fn test_should_detect_grid() {
+    let img = image::open("tests/data/errors/should_detect_grid.png")
+        .unwrap()
+        .to_luma8();
+
+    let mut search_img = PreparedImage::prepare(img);
+    assert!(search_img.detect_grids().len() > 0);
+}
 // As of commit 956686877c964731559463dc645aa14e44e691b3, the following elements
 // of the DeQRError enum are not used anywhere:
 // - InvalidGridSize
