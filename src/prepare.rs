@@ -189,9 +189,7 @@ where
         let threshold_s = cmp::max(w / 8, 1);
 
         for y in 0..h {
-            for r in &mut row_average {
-                *r = 0;
-            }
+            row_average.fill(0);
 
             for x in 0..w {
                 let (v, u) = if y % 2 == 0 {
