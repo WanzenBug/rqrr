@@ -638,21 +638,13 @@ fn reserved_cell(version: Version, i: usize, j: usize) -> bool {
     let mut ai = None;
     let mut aj = None;
 
-    fn abs_diff(x: usize, y: usize) -> usize {
-        if x < y {
-            y - x
-        } else {
-            x - y
-        }
-    }
-
     let mut len = 0;
     for (a, &pattern) in ver.apat.iter().take_while(|&&x| x != 0).enumerate() {
         len = a;
-        if abs_diff(pattern, i) < 3 {
+        if pattern.abs_diff(i) < 3 {
             ai = Some(a)
         }
-        if abs_diff(pattern, j) < 3 {
+        if pattern.abs_diff(j) < 3 {
             aj = Some(a)
         }
     }

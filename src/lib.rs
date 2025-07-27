@@ -331,7 +331,7 @@ impl ::std::fmt::Display for DeQRError {
             DeQRError::InvalidGridSize => "InvalidGridSize(Invalid version or corrupt)",
             DeQRError::EncodingError => "Encoding(Not UTF8)",
         };
-        write!(f, "{}", msg)
+        write!(f, "{msg}")
     }
 }
 
