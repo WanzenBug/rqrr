@@ -99,7 +99,7 @@ where
     /// If successful, returns the metadata along with the raw bit pattern.
     /// The raw data is still masked, so bits appear as in the source image.
     pub fn get_raw_data(&self) -> DeQRResult<(MetaData, RawData)> {
-        crate::decode::get_raw(&self.grid)
+        decode::get_raw(&self.grid, false)
     }
 
     /// Try to decode the grid.
@@ -113,7 +113,7 @@ where
     where
         W: Write,
     {
-        crate::decode::decode(&self.grid, writer)
+        decode::decode(&self.grid, writer)
     }
 }
 
@@ -141,7 +141,7 @@ pub trait BitGrid {
         let mut dyn_img = image::GrayImage::new(self.size() as u32, self.size() as u32);
         for y in 0..self.size() {
             for x in 0..self.size() {
-                let color = match self.bit(x, y) {
+                let color = match self.bit(y, x) {
                     true => 0,
                     false => 255,
                 };
@@ -149,6 +149,23 @@ pub trait BitGrid {
             }
         }
         dyn_img.save(p).unwrap();
+    }
+}
+
+/// Mirrored grid, switching x and y coordinates
+///
+/// Some QR codes are read mirrored, even though the spec does not officially support it.
+/// Since there is no marker in the QR code spec, we simply have to try to read the grid both ways
+/// if the first does not succeed.
+pub struct MirroredGrid<'a>(&'a dyn BitGrid);
+
+impl BitGrid for MirroredGrid<'_> {
+    fn size(&self) -> usize {
+        self.0.size()
+    }
+
+    fn bit(&self, y: usize, x: usize) -> bool {
+        self.0.bit(x, y)
     }
 }
 

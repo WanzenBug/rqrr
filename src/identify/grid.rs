@@ -150,7 +150,7 @@ fn setup_perspective<S>(
 where
     S: ImageBuffer,
 {
-    let inital = geometry::Perspective::create(
+    let initial = geometry::Perspective::create(
         &[
             caps.1.corners[0],
             caps.2.corners[0],
@@ -161,7 +161,7 @@ where
         (grid_size - 7) as f64,
     )?;
 
-    Some(jiggle_perspective(img, inital, grid_size))
+    Some(jiggle_perspective(img, initial, grid_size))
 }
 
 fn rotate_capstone(cap: &mut CapStone, h0: &Point, hd: &Point) {
@@ -204,7 +204,7 @@ where
 
     /* Choose the nearest allowable grid size */
     assert!(scan >= 1);
-    let size = scan * 2 + 13;
+    let size = scan + 13;
     let ver = (size as f64 - 15.0).floor() as usize / 4;
     ver * 4 + 17
 }
@@ -213,18 +213,16 @@ fn timing_scan<S>(img: &PreparedImage<S>, p0: &Point, p1: &Point) -> usize
 where
     S: ImageBuffer,
 {
-    let mut run_length = 0;
     let mut count = 0;
+    let mut previous = None;
     for p in geometry::BresenhamScan::new(p0, p1) {
         let pixel = img.get_pixel_at_point(p);
-        if PixelColor::White != pixel {
-            if run_length >= 2 {
-                count += 1
+        if let Some(previous) = previous {
+            if previous != pixel {
+                count += 1;
             }
-            run_length = 0;
-        } else {
-            run_length += 1;
         }
+        previous = Some(pixel);
     }
 
     count

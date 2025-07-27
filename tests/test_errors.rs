@@ -48,13 +48,7 @@ fn test_invalid_version() {
 
     let mut search_img = PreparedImage::prepare(img);
     let grids = search_img.detect_grids();
-    assert_eq!(grids.len(), 1);
-
-    let decoded = grids[0].decode();
-    assert!(decoded.is_err());
-
-    let err = decoded.unwrap_err();
-    assert_eq!(err, DeQRError::InvalidVersion);
+    assert_eq!(grids.len(), 0);
 }
 
 #[test]

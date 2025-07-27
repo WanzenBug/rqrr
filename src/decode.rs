@@ -59,7 +59,7 @@ pub struct RawData {
 impl RawData {
     /// Push a new bit into the bit stream
     pub fn push(&mut self, bit: bool) {
-        assert!((self.len >> 8) < MAX_PAYLOAD_SIZE);
+        assert!((self.len / 8) < MAX_PAYLOAD_SIZE);
         let bitpos = (self.len & 7) as u8;
         let bytepos = self.len >> 3;
 
@@ -110,18 +110,29 @@ pub fn decode<W>(code: &dyn BitGrid, writer: W) -> DeQRResult<MetaData>
 where
     W: Write,
 {
-    let meta = read_format(code)?;
-    let raw = read_data(code, &meta, true);
-    let stream = codestream_ecc(&meta, raw)?;
-    decode_payload(&meta, stream, writer)?;
+    fn _decode(c: &dyn BitGrid) -> DeQRResult<(MetaData, CorrectedDataStream)> {
+        let (meta, raw) = get_raw(c, true)?;
+        let stream = codestream_ecc(&meta, raw)?;
+        Ok((meta, stream))
+    }
+    let (meta, stream) = match _decode(code) {
+        Ok((meta, stream)) => (meta, stream),
+        Err(original) => match _decode(&crate::MirroredGrid(code)) {
+            Ok((meta, stream)) => (meta, stream),
+            Err(_) => return Err(original),
+        },
+    };
 
+    decode_payload(&meta, stream, writer)?;
     Ok(meta)
 }
 
-/// Return extracted metadata and the raw, uncorrected bit stream
-pub fn get_raw(code: &dyn BitGrid) -> DeQRResult<(MetaData, RawData)> {
+/// Return extracted metadata and the raw, uncorrected bit stream.
+///
+/// Optionally, you can keep the stream masked, so the data appears as it was in the image.
+pub fn get_raw(code: &dyn BitGrid, remove_masked: bool) -> DeQRResult<(MetaData, RawData)> {
     let meta = read_format(code)?;
-    let raw = read_data(code, &meta, false);
+    let raw = read_data(code, &meta, remove_masked);
     Ok((meta, raw))
 }
 
