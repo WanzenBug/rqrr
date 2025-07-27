@@ -223,7 +223,7 @@ where
         ) => {
             let ratio = stone_count * 100 / ring_count;
             // Verify that left is connected to right, and that stone is not connected
-            // Also that the pixel counts roughly repsect the 37.5% ratio
+            // Also that the pixel counts roughly respect the 37.5% ratio
             ring_color != stone_color && 10 < ratio && ratio < 70
         }
         _ => false,

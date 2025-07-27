@@ -104,7 +104,7 @@ where
 
     /// Try to decode the grid.
     ///
-    /// Instead of returning a String, this methode writes the decoded result to
+    /// Instead of returning a String, this method writes the decoded result to
     /// the given writer
     ///
     /// **Warning**: This may lead to half decoded content to be written to the
