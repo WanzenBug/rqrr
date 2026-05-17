@@ -34,13 +34,42 @@ If you have some other form of picture storage, you can use
 you to define your own source for images.
 "##
 )]
+#![no_std]
+
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
 pub use self::decode::{MetaData, RawData, Version, MAX_PAYLOAD_SIZE};
 pub(crate) use self::detect::{capstones_from_image, CapStone};
 pub use self::identify::Point;
 pub(crate) use self::identify::SkewedGridLocation;
 pub use self::prepare::PreparedImage;
-use std::error::Error;
-use std::io::Write;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::error::Error;
+use core::fmt;
+
+#[cfg(feature = "std")]
+pub use std::io::Write;
+#[cfg(not(feature = "std"))]
+pub trait Write {
+    fn write_all(&mut self, buf: &[u8]) -> Result<(), ()>;
+}
+#[cfg(not(feature = "std"))]
+impl Write for Vec<u8> {
+    fn write_all(&mut self, buf: &[u8]) -> Result<(), ()> {
+        self.extend_from_slice(buf);
+        Ok(())
+    }
+}
+#[cfg(not(feature = "std"))]
+impl<W: Write> Write for &mut W {
+    fn write_all(&mut self, buf: &[u8]) -> Result<(), ()> {
+        (*self).write_all(buf)
+    }
+}
 
 mod decode;
 mod detect;
@@ -312,14 +341,14 @@ type DeQRResult<T> = Result<T, DeQRError>;
 
 impl Error for DeQRError {}
 
-impl From<::std::string::FromUtf8Error> for DeQRError {
-    fn from(_: ::std::string::FromUtf8Error) -> Self {
+impl From<alloc::string::FromUtf8Error> for DeQRError {
+    fn from(_: alloc::string::FromUtf8Error) -> Self {
         DeQRError::EncodingError
     }
 }
 
-impl ::std::fmt::Display for DeQRError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DeQRError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let msg = match self {
             DeQRError::IoError => "IoError(Could not write to output)",
             DeQRError::DataUnderflow => "DataUnderflow(Expected more bits to decode)",

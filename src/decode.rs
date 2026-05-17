@@ -1,9 +1,10 @@
-use std::io::Write;
-use std::mem;
+use core::cmp;
+use core::mem;
 
 use g2p::{g2p, GaloisField};
 
 use crate::version_db::{RSParameters, VERSION_DATA_BASE};
+use crate::Write;
 use crate::{BitGrid, DeQRError, DeQRResult};
 
 g2p!(GF16, 4, modulus: 0b1_0011);
@@ -85,7 +86,7 @@ impl CorrectedDataStream {
 
     pub fn take_bits(&mut self, nbits: usize) -> usize {
         let mut ret = 0;
-        let max_len = ::std::cmp::min(self.bits_remaining(), nbits);
+        let max_len = cmp::min(self.bits_remaining(), nbits);
         assert!(max_len <= mem::size_of::<usize>() * 8);
         for _ in 0..max_len {
             let b = self.data[self.ptr >> 3];

@@ -24,8 +24,9 @@ include = [
 ]
 
 [features]
+std = []
 img = ["image"]
-default = ["img"]
+default = ["img", "std"]
 
 [[bench]]
 name = "bench_cap_find"
