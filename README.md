@@ -12,7 +12,7 @@ The most basic usage is shown below:
 use image;
 use rqrr;
 
-let img = image::open("tests/data/github.gif")?.to_luma();
+let img = image::open("tests/data/github.gif")?.into_luma8();
 // Prepare for detection
 let mut img = rqrr::PreparedImage::prepare(img);
 // Search for grids, without decoding
