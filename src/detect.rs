@@ -4,6 +4,7 @@ use crate::{
     identify::Point,
     prepare::{ColoredRegion, PreparedImage, Row},
 };
+use alloc::vec::Vec;
 
 /// A locator pattern of a QR grid
 ///

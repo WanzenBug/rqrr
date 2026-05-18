@@ -1,4 +1,4 @@
-use std::{cmp, mem};
+use core::{cmp, mem};
 
 use crate::{
     geometry,

@@ -1,7 +1,9 @@
-use std::{cmp, num::NonZeroUsize};
-
 use crate::identify::match_capstones::CapStoneGroup;
 use crate::identify::Point;
+use alloc::boxed::Box;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::{cmp, num::NonZeroUsize};
 use lru::LruCache;
 
 /// An black-and-white image that can be mutated on search for QR codes
