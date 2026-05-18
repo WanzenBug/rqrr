@@ -39,5 +39,5 @@ image = { version = ">= 0.24, <= 0.25", default-features = false, features = ["p
 
 [dependencies]
 g2p = "1.0"
-lru = "0.16"
+lru = "0.18"
 image = { version = ">= 0.24, <= 0.25", optional = true, default-features = false }
