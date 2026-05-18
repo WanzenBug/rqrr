@@ -259,7 +259,7 @@ impl SimpleGrid {
     where
         F: Fn(usize, usize) -> bool,
     {
-        let mut cell_bitmap = vec![0; (size * size + 7) / 8];
+        let mut cell_bitmap = vec![0; (size * size).div_ceil(8)];
         let mut c = 0;
         for y in 0..size {
             for x in 0..size {
