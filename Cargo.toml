@@ -1,7 +1,6 @@
 [package]
 name = "rqrr"
 edition = "2021"
-rust-version = "1.64.0"
 version = "0.10.1"
 authors = ["WanzenBug <moritz@wanzenbug.xyz>"]
 license = "(MIT OR Apache-2.0) AND ISC"
@@ -22,6 +21,7 @@ include = [
     "/src/**/*.rs",
     "/src/**/*.png",
 ]
+rust-version = "1.85.1"
 
 [features]
 img = ["image"]
