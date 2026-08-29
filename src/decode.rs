@@ -102,10 +102,10 @@ impl CorrectedDataStream {
 
     /// Read `nbits` bits, or fail if the stream cannot supply them all.
     ///
-    /// `take_bits` returns a value assembled from however many bits were left,
-    /// so a short stream yields a *smaller* number rather than an error. That
-    /// is fine for callers that check `bits_remaining` first, but a character
-    /// count indicator read that way silently under-reports the count.
+    /// `take_bits()` returns a value assembled from however many bits were
+    /// left, so a short stream yields a *smaller* number rather than an error.
+    /// That is fine for callers that check `bits_remaining()` first, but a
+    /// character count indicator read that way silently under-reports the count.
     fn take_bits_checked(&mut self, nbits: usize) -> DeQRResult<usize> {
         if self.bits_remaining() < nbits {
             Err(DeQRError::DataUnderflow)?
