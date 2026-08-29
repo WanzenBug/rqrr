@@ -99,6 +99,19 @@ impl CorrectedDataStream {
 
         ret
     }
+
+    /// Read `nbits` bits, or fail if the stream cannot supply them all.
+    ///
+    /// `take_bits` returns a value assembled from however many bits were left,
+    /// so a short stream yields a *smaller* number rather than an error. That
+    /// is fine for callers that check `bits_remaining` first, but a character
+    /// count indicator read that way silently under-reports the count.
+    fn take_bits_checked(&mut self, nbits: usize) -> DeQRResult<usize> {
+        if self.bits_remaining() < nbits {
+            Err(DeQRError::DataUnderflow)?
+        }
+        Ok(self.take_bits(nbits))
+    }
 }
 
 /// Given a grid try to decode and write it to the output writer
@@ -189,7 +202,7 @@ where
         _ => 12,
     };
 
-    let count = ds.take_bits(nbits);
+    let count = ds.take_bits_checked(nbits)?;
     if ds.bits_remaining() < count * 13 {
         Err(DeQRError::DataUnderflow)?
     }
@@ -221,7 +234,7 @@ where
         _ => 16,
     };
 
-    let count = ds.take_bits(nbits);
+    let count = ds.take_bits_checked(nbits)?;
     if ds.bits_remaining() < count * 8 {
         Err(DeQRError::DataUnderflow)?;
     }
@@ -242,7 +255,7 @@ where
         Version(10..=26) => 11,
         _ => 13,
     };
-    let mut count = ds.take_bits(nbits);
+    let mut count = ds.take_bits_checked(nbits)?;
     let mut buf = [0; 2];
 
     while count >= 2 {
@@ -290,7 +303,7 @@ where
         _ => 14,
     };
 
-    let mut count = ds.take_bits(nbits);
+    let mut count = ds.take_bits_checked(nbits)?;
     let mut buf = [0; 3];
     while count >= 3 {
         numeric_tuple(&mut buf, ds, 10, 3)?;
@@ -1030,5 +1043,92 @@ mod tests {
         }
         // 128 of the 160 version/level combinations have two block sizes.
         assert_eq!(checked, 128);
+    }
+    /// The `nbits` wide big endian representation of `value`, one entry per bit.
+    fn bits_of(value: usize, nbits: usize) -> Vec<u8> {
+        (0..nbits)
+            .map(|i| ((value >> (nbits - 1 - i)) & 1) as u8)
+            .collect()
+    }
+
+    /// A corrected stream holding exactly `bits` and nothing more.
+    fn stream_of(bits: &[u8]) -> CorrectedDataStream {
+        let mut ds = CorrectedDataStream {
+            data: [0; MAX_PAYLOAD_SIZE],
+            ptr: 0,
+            bit_len: bits.len(),
+        };
+        for (i, &bit) in bits.iter().enumerate() {
+            if bit != 0 {
+                ds.data[i >> 3] |= 0x80 >> (i & 7);
+            }
+        }
+        ds
+    }
+
+    #[test]
+    fn test_truncated_count_indicator() {
+        let meta = MetaData {
+            version: Version(1),
+            ecc_level: 0,
+            mask: 0,
+        };
+
+        // A mode indicator followed by a character count indicator one bit
+        // short of complete, for each of the four data modes. At version 1 the
+        // counts are 10, 9, 8 and 8 bits wide respectively.
+        for (mode, nbits) in [(1, 10), (2, 9), (4, 8), (8, 8)] {
+            let mut bits = bits_of(mode, 4);
+            bits.extend(bits_of(0, nbits - 1));
+
+            let mut out = Vec::new();
+            assert_eq!(
+                decode_payload(&meta, stream_of(&bits), &mut out),
+                Err(DeQRError::DataUnderflow),
+                "mode {mode} accepted a truncated character count indicator"
+            );
+        }
+    }
+
+    #[test]
+    fn test_truncated_count_indicator_after_valid_segment() {
+        let meta = MetaData {
+            version: Version(1),
+            ecc_level: 0,
+            mask: 0,
+        };
+
+        // A well formed byte segment carrying "A", then a second byte mode
+        // indicator whose 8 bit count indicator is cut off after 4 bits.
+        let mut bits = bits_of(4, 4);
+        bits.extend(bits_of(1, 8));
+        bits.extend(bits_of(u32::from(b'A') as usize, 8));
+        bits.extend(bits_of(4, 4));
+        bits.extend(bits_of(0, 4));
+
+        let mut out = Vec::new();
+        assert_eq!(
+            decode_payload(&meta, stream_of(&bits), &mut out),
+            Err(DeQRError::DataUnderflow),
+            "a stream cut short mid count indicator decoded to {out:?}"
+        );
+    }
+
+    #[test]
+    fn test_count_indicator_ends_stream() {
+        let meta = MetaData {
+            version: Version(1),
+            ecc_level: 0,
+            mask: 0,
+        };
+
+        // The stream ends on the last bit of the count indicator. That is a
+        // complete - if empty - segment and must still decode.
+        let mut bits = bits_of(4, 4);
+        bits.extend(bits_of(0, 8));
+
+        let mut out = Vec::new();
+        decode_payload(&meta, stream_of(&bits), &mut out).expect("a complete count indicator");
+        assert!(out.is_empty());
     }
 }
