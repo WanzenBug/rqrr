@@ -167,22 +167,11 @@ fn decode_eci<W>(_meta: &MetaData, ds: &mut CorrectedDataStream, mut _writer: W)
 where
     W: Write,
 {
-    if ds.bits_remaining() < 8 {
-        Err(DeQRError::DataUnderflow)?
-    }
-
-    let mut _eci = ds.take_bits(8) as u32;
+    let mut _eci = ds.take_bits_checked(8)? as u32;
     if _eci & 0xc0 == 0x80 {
-        if ds.bits_remaining() < 8 {
-            Err(DeQRError::DataUnderflow)?
-        }
-        _eci = (_eci << 8) | (ds.take_bits(8) as u32)
+        _eci = (_eci << 8) | (ds.take_bits_checked(8)? as u32)
     } else if _eci & 0xe0 == 0xc0 {
-        if ds.bits_remaining() < 16 {
-            Err(DeQRError::DataUnderflow)?
-        }
-
-        _eci = (_eci << 16) | (ds.take_bits(16) as u32)
+        _eci = (_eci << 16) | (ds.take_bits_checked(16)? as u32)
     }
     Ok(())
 }
@@ -275,17 +264,13 @@ fn alpha_tuple(
     nbits: usize,
     digits: usize,
 ) -> DeQRResult<()> {
-    if ds.bits_remaining() < nbits {
-        Err(DeQRError::DataUnderflow)
-    } else {
-        let mut tuple = ds.take_bits(nbits);
-        for i in (0..digits).rev() {
-            const ALPHA_MAP: &[u8; 46] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:\x00";
-            buf[i] = ALPHA_MAP[tuple % 45];
-            tuple /= 45;
-        }
-        Ok(())
+    let mut tuple = ds.take_bits_checked(nbits)?;
+    for i in (0..digits).rev() {
+        const ALPHA_MAP: &[u8; 46] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:\x00";
+        buf[i] = ALPHA_MAP[tuple % 45];
+        tuple /= 45;
     }
+    Ok(())
 }
 
 fn decode_numeric<W>(meta: &MetaData, ds: &mut CorrectedDataStream, mut writer: W) -> DeQRResult<()>
@@ -329,16 +314,12 @@ fn numeric_tuple(
     nbits: usize,
     digits: usize,
 ) -> DeQRResult<()> {
-    if ds.bits_remaining() < nbits {
-        Err(DeQRError::DataUnderflow)
-    } else {
-        let mut tuple = ds.take_bits(nbits);
-        for i in (0..digits).rev() {
-            buf[i] = (tuple % 10) as u8 + b'0';
-            tuple /= 10;
-        }
-        Ok(())
+    let mut tuple = ds.take_bits_checked(nbits)?;
+    for i in (0..digits).rev() {
+        buf[i] = (tuple % 10) as u8 + b'0';
+        tuple /= 10;
     }
+    Ok(())
 }
 
 fn codestream_ecc(meta: &MetaData, ds: RawData) -> DeQRResult<CorrectedDataStream> {
