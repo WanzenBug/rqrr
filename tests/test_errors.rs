@@ -2,10 +2,13 @@
 
 use rqrr::{DeQRError, PreparedImage};
 
+#[cfg(feature = "std")]
 use std::io::{Error, ErrorKind, Write};
 
+#[cfg(feature = "std")]
 struct BrokenWriter {}
 
+#[cfg(feature = "std")]
 impl Write for BrokenWriter {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Error> {
         println!(
@@ -21,6 +24,7 @@ impl Write for BrokenWriter {
     }
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn test_io_error() {
     let img = image::open("tests/data/errors/io_error.png")

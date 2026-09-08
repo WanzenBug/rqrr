@@ -1,4 +1,5 @@
 use crate::CapStone;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone)]
 pub struct CapStoneGroup(pub CapStone, pub CapStone, pub CapStone);
