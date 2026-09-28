@@ -97,3 +97,22 @@ fn test_mirrored() {
     assert_eq!(meta.mask, 0);
     assert_eq!(raw, "rqrr");
 }
+
+/// A scanned code whose three finder patterns sit at visibly unequal
+/// distances, scoring just over the first-pass viability threshold. Nothing
+/// else in the image competes for those capstones, so the relaxed second pass
+/// has to pick them up.
+#[test]
+fn test_full_asymmetric_capstones() {
+    let png = image::open("tests/data/full/asymmetric_capstones.png")
+        .unwrap()
+        .to_luma8();
+
+    let mut search_img = rqrr::PreparedImage::prepare(png);
+    let grids = search_img.detect_grids();
+    assert_eq!(grids.len(), 1);
+
+    let (meta, content) = grids[0].decode().unwrap();
+    assert_eq!(meta.version, rqrr::Version(2));
+    assert_eq!(content, "VlACKS54ZWneBua5wgAAAIQA");
+}
