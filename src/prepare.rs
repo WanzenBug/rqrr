@@ -265,17 +265,44 @@ where
     /// By trying to match up the relative perspective of 3
     /// [CapStones](struct.CapStone.html) along with other criteria we can find the
     /// CapStones that corner the same QR code.
+    /// The symmetry pre-filter is only a cheap way to order and bound the
+    /// groups worth validating; whether a group really is a QR code is decided
+    /// by `SkewedGridLocation::from_group` below. A pair rejected by the
+    /// pre-filter is therefore never known to be wrong, only untried, so a
+    /// second pass re-offers the capstones no group claimed under a threshold
+    /// loose enough to cover codes whose finder patterns image asymmetrically.
     fn find_groupings(&mut self, capstones: Vec<crate::CapStone>) -> Vec<CapStoneGroup>
     where
         S: Clone,
     {
         let mut used_capstones = Vec::new();
         let mut groups = Vec::new();
+        for max_score in [
+            crate::identify::VIABILITY_THRESHOLD,
+            crate::identify::RELAXED_VIABILITY_THRESHOLD,
+        ] {
+            self.collect_groupings(&capstones, max_score, &mut used_capstones, &mut groups);
+        }
+        groups
+    }
+
+    /// Claim groups among the capstones not yet in `used_capstones`, trying
+    /// only pairs whose symmetry score is under `max_score`.
+    fn collect_groupings(
+        &mut self,
+        capstones: &[crate::CapStone],
+        max_score: f64,
+        used_capstones: &mut Vec<usize>,
+        groups: &mut Vec<CapStoneGroup>,
+    ) where
+        S: Clone,
+    {
         for idx in 0..capstones.len() {
             if used_capstones.contains(&idx) {
                 continue;
             }
-            let pairs = crate::identify::find_and_rank_possible_neighbors(&capstones, idx);
+            let pairs =
+                crate::identify::find_and_rank_possible_neighbors(capstones, idx, max_score);
             for pair in pairs {
                 if used_capstones.contains(&pair.0) || used_capstones.contains(&pair.1) {
                     continue;
@@ -301,7 +328,6 @@ where
                 used_capstones.push(pair.1);
             }
         }
-        groups
     }
 
     pub fn without_preparation(buf: S) -> Self {
