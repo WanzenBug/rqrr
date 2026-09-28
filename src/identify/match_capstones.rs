@@ -9,11 +9,23 @@ struct Neighbor {
     distance: f64,
 }
 
-/// Return each pair Capstone indexes that are likely to be from a QR code
-/// Ordered from most symmetric to least symmetric
-pub fn find_and_rank_possible_neighbors(capstones: &[CapStone], idx: usize) -> Vec<(usize, usize)> {
-    const VIABILITY_THRESHOLD: f64 = 0.25;
+/// Symmetry score below which a neighbor pair is tried on the first pass.
+pub const VIABILITY_THRESHOLD: f64 = 0.25;
 
+/// Symmetry score below which a neighbor pair is tried on the second pass.
+///
+/// Scores are normalized to `[0, 1)`, so this admits every pair whose two
+/// neighbor distances are within a factor of four of each other.
+pub const RELAXED_VIABILITY_THRESHOLD: f64 = 0.75;
+
+/// Return each pair Capstone indexes that are likely to be from a QR code
+/// whose symmetry score is under `max_score`, ordered from most symmetric to
+/// least symmetric.
+pub fn find_and_rank_possible_neighbors(
+    capstones: &[CapStone],
+    idx: usize,
+    max_score: f64,
+) -> Vec<(usize, usize)> {
     let (hlist, vlist) = find_possible_neighbors(capstones, idx);
     let mut res = Vec::new();
     struct NeighborSet {
@@ -31,7 +43,7 @@ pub fn find_and_rank_possible_neighbors(capstones: &[CapStone], idx: usize) -> V
                     (1.0f64 - vn.distance / hn.distance).abs()
                 }
             };
-            if score < VIABILITY_THRESHOLD {
+            if score < max_score {
                 res.push(NeighborSet {
                     score,
                     h_index: hn.index,
